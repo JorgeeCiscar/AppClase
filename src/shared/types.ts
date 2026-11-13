@@ -111,6 +111,35 @@ export interface Opener {
 export interface Settings {
   course_name: string
   openers: Opener[]
+  /** Carpeta donde se guardan los ficheros descargados de la plataforma del curso. */
+  downloads_dir: string
+}
+
+/** Un fichero enlazado en la página de una actividad. */
+export interface ActivityFile {
+  name: string
+  url: string
+  /** true si es un fichero tuyo (tu entrega o la corrección), no del enunciado. */
+  own: boolean
+}
+
+/** Datos leídos de la página de una actividad (Aules, Moodle u otra web). */
+export interface ScrapedActivity {
+  url: string
+  platform: 'moodle' | 'generic'
+  title: string
+  course: string
+  description: string
+  /** Fecha de entrega en AAAA-MM-DD, si se encontró. */
+  due_date: string | null
+  /** Texto original de la fecha de entrega, con la hora (p. ej. «viernes, 21 de noviembre de 2026, 23:59»). */
+  due_raw: string | null
+  files: ActivityFile[]
+}
+
+export interface DownloadResult extends AddFilesResult {
+  /** Carpeta donde se guardaron los ficheros. */
+  dir: string
 }
 
 export interface Stats {
@@ -198,6 +227,17 @@ export interface Api {
     get: () => Promise<Settings>
     save: (s: Partial<Settings>) => Promise<Settings>
     chooseExecutable: () => Promise<string | null>
+    chooseDownloadsDir: () => Promise<string | null>
+  }
+  importer: {
+    /** Abre la página (pidiendo iniciar sesión si hace falta) y lee la actividad. */
+    read: (url: string) => Promise<ScrapedActivity>
+    /** Cierra la ventana de lectura en curso. */
+    cancel: () => Promise<void>
+    /** Descarga ficheros de la plataforma con la sesión iniciada y los indexa en el elemento. */
+    download: (itemId: number, files: { name: string; url: string }[]) => Promise<DownloadResult>
+    /** Borra la sesión guardada de la plataforma. */
+    logout: () => Promise<void>
   }
   app: {
     version: () => Promise<string>

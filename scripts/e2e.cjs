@@ -5,6 +5,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
 const { _electron } = require('playwright')
+const { startFakePlatform } = require('./fake-platform.cjs')
 
 const ROOT = path.resolve(__dirname, '..')
 const S = fs.mkdtempSync(path.join(process.env.E2E_OUT || os.tmpdir(), 'appclase-e2e-'))
@@ -198,6 +199,97 @@ function check(name, ok, detail = '') {
       /solo funcionan en la app instalada/.test(updateText || ''),
       (updateText || '').replace(/\s+/g, ' ').trim()
     )
+
+    // --- importar una actividad desde su enlace (plataforma falsa tipo Moodle/Aules) ---
+    const { server, base } = await startFakePlatform()
+    const descargas = path.join(S, 'descargas')
+    await win.evaluate((d) => window.api.settings.save({ downloads_dir: d }), descargas)
+    const subjectsNow = await win.evaluate(() => window.api.subjects.list())
+    const idOf = (name) => String(subjectsNow.find((s) => s.name.startsWith(name)).id)
+    const value = (sel) => win.locator(sel).inputValue()
+
+    await win.click('.sidebar nav button:has-text("Panel")')
+    await win.click('button:has-text("Importar desde enlace")')
+    await win.fill('.modal input[name="activity_url"]', `${base}/mod/assign/view.php?id=7`)
+    const loginWinP = app.waitForEvent('window')
+    await win.click('.modal button:has-text("Leer actividad")')
+    const loginWin = await loginWinP
+    await loginWin.waitForSelector('input[type="password"]')
+    check('la plataforma pide iniciar sesión en una ventana aparte', true)
+    await loginWin.fill('input[name="username"]', 'alumne')
+    await loginWin.fill('input[type="password"]', 'secret')
+    await loginWin.click('#loginbtn')
+
+    await win.waitForSelector('.modal input[name="title"]', { timeout: 30000 })
+    const t1 = await value('.modal input[name="title"]')
+    check('tras el login vuelve a la actividad y lee el título', t1 === 'Tasca 3: bucles', t1)
+    check(
+      'reconoce «Programació (1r DAW)» como Programación',
+      (await value('.modal select[name="subject_id"]')) === idOf('Programación')
+    )
+    const due1 = await value('.modal input[name="due_date"]')
+    check('lee la fecha de vencimiento en valenciano (no la de apertura)', due1 === '2026-11-21', due1)
+    const notes1 = await value('.modal textarea[name="notes"]')
+    check('copia el enunciado en las notas', /Feu els exercicis de bucles/.test(notes1))
+    check('y la hora de entrega', /23:59/.test(notes1))
+    const boxes = win.locator('.modal .files input[type="checkbox"]')
+    const nBoxes = await boxes.count()
+    let nChecked = 0
+    for (let i = 0; i < nBoxes; i++) if (await boxes.nth(i).isChecked()) nChecked++
+    check('encuentra los 3 ficheros y marca solo los 2 del enunciado', nBoxes === 3 && nChecked === 2, `${nChecked} de ${nBoxes}`)
+    await win.screenshot({ path: path.join(S, 'shots', 'importar.png') })
+
+    await win.click('.modal button:has-text("Guardar")')
+    await win.waitForSelector('.modal', { state: 'detached', timeout: 30000 })
+    const imported = await win.evaluate(async () => (await window.api.items.list({ text: 'Tasca 3' }))[0])
+    check('crea el elemento como entrega pendiente', imported && imported.status === 'pendiente' && imported.kind === 'ejercicio')
+    const files1 = await win.evaluate((id) => window.api.files.list(id), imported.id)
+    check('descarga e indexa los 2 ficheros', files1.length === 2, files1.map((f) => f.name).join(', '))
+    const pdf = files1.find((f) => f.name === 'enunciat tasca 3.pdf')
+    check(
+      'el PDF se descarga con la sesión iniciada (no la página de login)',
+      !!pdf && fs.readFileSync(pdf.path, 'utf8').startsWith('%PDF-1.4 enunciat'),
+      pdf ? pdf.path : '(no está)'
+    )
+    check(
+      'se guardan en <descargas>/<asignatura>/<actividad>',
+      !!pdf && path.dirname(pdf.path) === path.join(descargas, 'PRO', 'Tasca 3_ bucles')
+    )
+    check('tu propia entrega no se descarga', !files1.some((f) => f.name.includes('mi-entrega')))
+
+    // Página genérica (no Moodle) en castellano: no pide sesión.
+    await win.click('button:has-text("Importar desde enlace")')
+    await win.fill('.modal input[name="activity_url"]', `${base}/actividad-generica.html`)
+    await win.click('.modal button:has-text("Leer actividad")')
+    await win.waitForSelector('.modal input[name="title"]', { timeout: 30000 })
+    const t2 = await value('.modal input[name="title"]')
+    check('página genérica: lee el título', t2 === 'Práctica 2: formulario accesible', t2)
+    const due2 = await value('.modal input[name="due_date"]')
+    check('página genérica: lee «Fecha límite: 05/12/2026»', due2 === '2026-12-05', due2)
+    check(
+      'página genérica: reconoce Lenguajes de marcas',
+      (await value('.modal select[name="subject_id"]')) === idOf('Lenguajes de marcas')
+    )
+    await win.click('.modal button:has-text("Guardar")')
+    await win.waitForSelector('.modal', { state: 'detached', timeout: 30000 })
+    const imported2 = await win.evaluate(async () => (await window.api.items.list({ text: 'Práctica 2' }))[0])
+    const files2 = await win.evaluate((id) => window.api.files.list(id), imported2.id)
+    check('página genérica: descarga el PDF enlazado', files2.length === 1 && files2[0].name === 'practica2.pdf', files2.map((f) => f.name).join(', '))
+
+    // Cerrar sesión y cancelar: la siguiente lectura vuelve a pedir el login, y cerrar la ventana cancela.
+    await win.evaluate(() => window.api.importer.logout())
+    const relogP = app.waitForEvent('window')
+    const pending = win.evaluate((u) => window.api.importer.read(u).then(() => 'leída', (e) => e.message), `${base}/mod/assign/view.php?id=7`)
+    const relog = await relogP
+    await relog.waitForSelector('input[type="password"]')
+    check('tras cerrar sesión, la plataforma vuelve a pedir el login', true)
+    await app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().includes('/login/'))
+      if (w) w.close()
+    })
+    const outcome = await pending
+    check('cerrar esa ventana cancela la lectura con un mensaje claro', /cancelada/.test(outcome), outcome)
+    server.close()
 
     check('sin errores de JavaScript en la interfaz', errors.length === 0, errors.join(' | '))
     await app.close()

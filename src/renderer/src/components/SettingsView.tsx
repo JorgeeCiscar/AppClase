@@ -52,6 +52,33 @@ export default function SettingsView({
         />
       </label>
 
+      <h2>Plataforma del curso</h2>
+      <p className="muted small" style={{ maxWidth: 620 }}>
+        Al importar una actividad desde un enlace, sus ficheros se descargan en esta carpeta, dentro de una
+        subcarpeta por asignatura y actividad.
+      </p>
+      <div className="row" style={{ maxWidth: 620 }}>
+        <input readOnly value={settings.downloads_dir} style={{ flex: 1 }} title={settings.downloads_dir} />
+        <button
+          onClick={async () => {
+            const dir = await window.api.settings.chooseDownloadsDir()
+            if (dir) await save({ ...settings, downloads_dir: dir })
+          }}
+        >
+          Cambiar…
+        </button>
+      </div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <button
+          onClick={async () => {
+            await window.api.importer.logout()
+            onToast('Sesión de la plataforma cerrada: la próxima importación te pedirá entrar de nuevo')
+          }}
+        >
+          Cerrar sesión de la plataforma
+        </button>
+      </div>
+
       <h2>Abrir con</h2>
       <p className="muted small" style={{ maxWidth: 620 }}>
         El botón «Abrir» usa la aplicación que el sistema tenga asociada a cada tipo de fichero. Aquí puedes añadir

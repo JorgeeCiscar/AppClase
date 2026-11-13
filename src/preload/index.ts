@@ -45,7 +45,14 @@ const api: Api = {
   settings: {
     get: invoke('settings:get'),
     save: invoke('settings:save'),
-    chooseExecutable: invoke('settings:chooseExecutable')
+    chooseExecutable: invoke('settings:chooseExecutable'),
+    chooseDownloadsDir: invoke('settings:chooseDownloadsDir')
+  },
+  importer: {
+    read: invoke('importer:read'),
+    cancel: invoke('importer:cancel'),
+    download: invoke('importer:download'),
+    logout: invoke('importer:logout')
   },
   app: {
     version: invoke('app:version'),

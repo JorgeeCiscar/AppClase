@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Item, ItemInput, ItemKind, Status, Subject, Unit } from '../../../shared/types'
 import { ITEM_KINDS, STATUSES } from '../../../shared/types'
-import { KIND_LABEL } from '../util'
+import { KIND_LABEL, errorMessage } from '../util'
 import Modal from './Modal'
 import TagInput from './TagInput'
 
@@ -11,6 +11,10 @@ export default function ItemForm({
   initial,
   defaultSubjectId,
   defaultUnitId,
+  prefill,
+  modalTitle,
+  header,
+  footer,
   onSaved,
   onClose
 }: {
@@ -19,21 +23,28 @@ export default function ItemForm({
   initial?: Item
   defaultSubjectId?: number
   defaultUnitId?: number | null
-  onSaved: (i: Item) => void
+  /** Valores iniciales para un elemento nuevo (p. ej. leídos de la plataforma). */
+  prefill?: Partial<ItemInput>
+  modalTitle?: string
+  /** Contenido extra encima de los campos y debajo de ellos (antes de los botones). */
+  header?: ReactNode
+  footer?: ReactNode
+  /** Puede ser asíncrono: el formulario sigue en «Guardando…» hasta que termina. */
+  onSaved: (i: Item) => void | Promise<void>
   onClose: () => void
 }) {
   const [form, setForm] = useState<ItemInput>({
     id: initial?.id,
-    subject_id: initial?.subject_id ?? defaultSubjectId ?? subjects[0]?.id ?? 0,
-    unit_id: initial?.unit_id ?? defaultUnitId ?? null,
-    kind: initial?.kind ?? 'ejercicio',
-    title: initial?.title ?? '',
-    notes: initial?.notes ?? '',
-    url: initial?.url ?? '',
-    due_date: initial?.due_date ?? '',
-    status: initial?.status ?? null,
-    grade: initial?.grade ?? null,
-    tags: initial?.tags ?? []
+    subject_id: initial?.subject_id ?? prefill?.subject_id ?? defaultSubjectId ?? subjects[0]?.id ?? 0,
+    unit_id: initial?.unit_id ?? prefill?.unit_id ?? defaultUnitId ?? null,
+    kind: initial?.kind ?? prefill?.kind ?? 'ejercicio',
+    title: initial?.title ?? prefill?.title ?? '',
+    notes: initial?.notes ?? prefill?.notes ?? '',
+    url: initial?.url ?? prefill?.url ?? '',
+    due_date: initial?.due_date ?? prefill?.due_date ?? '',
+    status: initial?.status ?? prefill?.status ?? null,
+    grade: initial?.grade ?? prefill?.grade ?? null,
+    tags: initial?.tags ?? prefill?.tags ?? []
   })
   const [subjectUnits, setSubjectUnits] = useState<Unit[]>(units)
   const [suggestions, setSuggestions] = useState<string[]>([])
@@ -64,18 +75,22 @@ export default function ItemForm({
     setSaving(true)
     setError('')
     try {
-      onSaved(await window.api.items.save(form))
+      const saved = await window.api.items.save(form)
+      // Si algo falla después, volver a guardar actualiza este elemento en vez de duplicarlo.
+      setForm((f) => ({ ...f, id: saved.id }))
+      await onSaved(saved)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorMessage(err))
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <Modal title={initial ? 'Editar elemento' : 'Nuevo elemento'} onClose={onClose}>
+    <Modal title={modalTitle ?? (initial ? 'Editar elemento' : 'Nuevo elemento')} onClose={onClose}>
       <form className="form" onSubmit={submit}>
         {error && <div className="error">{error}</div>}
+        {header}
 
         <label className="field">
           Título
@@ -169,6 +184,8 @@ export default function ItemForm({
           Notas
           <textarea name="notes" value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} />
         </label>
+
+        {footer}
 
         <div className="modal-actions">
           <button type="button" className="ghost" onClick={onClose}>

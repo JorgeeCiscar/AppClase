@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Item, Opener, Stats } from '../../../shared/types'
 import { fmtDateTime, fileIcon } from '../util'
+import ImportButton from './ImportActivity'
 import ItemDetail from './ItemDetail'
 import ItemRow from './ItemRow'
 
@@ -33,6 +34,7 @@ export default function Dashboard({
       <div className="page-header">
         <h1>Panel</h1>
         <span className="muted">{courseName}</span>
+        <ImportButton className="primary" onToast={onToast} onImported={() => void load()} />
       </div>
 
       <div className="stats">

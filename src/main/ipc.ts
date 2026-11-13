@@ -1,4 +1,5 @@
-import { BrowserWindow, app, dialog, ipcMain } from 'electron'
+import { BrowserWindow, app, dialog, ipcMain, type OpenDialogOptions } from 'electron'
+import { isAbsolute, join } from 'node:path'
 import type { SQLInputValue } from 'node:sqlite'
 import type {
   Item, ItemFilter, ItemInput, Opener, Settings, Stats, Subject, SubjectInput, Unit, UnitInput
@@ -8,6 +9,7 @@ import { DAW1_SUBJECTS, seedSubjects, transaction, type DB } from './db'
 import {
   addPaths, chooseFiles, chooseFolder, openFile, openWith, relocate, revalidate, reveal, searchContent
 } from './files'
+import { cancelRead, downloadFiles, logoutPlatform, readActivity } from './importer'
 
 const SEP = String.fromCharCode(31) // separador para group_concat de etiquetas
 
@@ -184,7 +186,9 @@ export function listItems(db: DB, f: ItemFilter = {}): Item[] {
 
 // -------------------------------------------------------------------- ajustes
 
-const DEFAULT_SETTINGS: Settings = { course_name: '1º DAW', openers: [] }
+const DEFAULT_COURSE_NAME = '1º DAW'
+/** Por defecto, Documentos/AppClase. */
+const defaultDownloadsDir = (): string => join(app.getPath('documents'), 'AppClase')
 
 export function getSettings(db: DB): Settings {
   const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[]
@@ -196,13 +200,23 @@ export function getSettings(db: DB): Settings {
   } catch {
     openers = []
   }
-  return { course_name: map.get('course_name') || DEFAULT_SETTINGS.course_name, openers }
+  return {
+    course_name: map.get('course_name') || DEFAULT_COURSE_NAME,
+    openers,
+    downloads_dir: map.get('downloads_dir') || defaultDownloadsDir()
+  }
 }
 
 export function saveSettings(db: DB, s: Partial<Settings>): Settings {
   transaction(db, () => {
     const put = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
-    if (s.course_name !== undefined) put.run('course_name', nullIfEmpty(s.course_name) ?? DEFAULT_SETTINGS.course_name)
+    if (s.course_name !== undefined) put.run('course_name', nullIfEmpty(s.course_name) ?? DEFAULT_COURSE_NAME)
+    if (s.downloads_dir !== undefined) {
+      const dir = nullIfEmpty(s.downloads_dir)
+      if (dir && !isAbsolute(dir)) throw new Error('La carpeta de descargas tiene que ser una ruta completa')
+      if (dir) put.run('downloads_dir', dir)
+      else db.prepare(`DELETE FROM settings WHERE key = 'downloads_dir'`).run()
+    }
     if (s.openers !== undefined) {
       const clean = s.openers
         .map((o) => ({ name: normalizeTag(o.name || ''), command: (o.command || '').trim(), args: (o.args || '').trim() }))
@@ -379,6 +393,24 @@ export function registerIpc(db: DB): void {
       : await dialog.showOpenDialog({ ...opts, properties: [...opts.properties] })
     return r.canceled ? null : r.filePaths[0] ?? null
   })
+  h('settings:chooseDownloadsDir', async () => {
+    const w = win()
+    const opts: OpenDialogOptions = {
+      title: 'Carpeta para los ficheros de la plataforma',
+      buttonLabel: 'Usar esta carpeta',
+      defaultPath: getSettings(db).downloads_dir,
+      properties: ['openDirectory', 'createDirectory']
+    }
+    const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled ? null : r.filePaths[0] ?? null
+  })
+
+  h('importer:read', (url: string) => readActivity(url))
+  h('importer:cancel', () => cancelRead())
+  h('importer:download', (itemId: number, files: { name: string; url: string }[]) =>
+    downloadFiles(db, getSettings(db).downloads_dir, itemId, Array.isArray(files) ? files : [])
+  )
+  h('importer:logout', () => logoutPlatform())
 
   h('app:version', () => app.getVersion())
 }

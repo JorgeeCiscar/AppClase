@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileRef, Opener } from '../../../shared/types'
-import { fileIcon, fmtDateTime, fmtSize } from '../util'
+import { errorMessage, fileIcon, fmtDateTime, fmtSize } from '../util'
 
 /**
  * Lista de ficheros de un elemento. Los ficheros se REFERENCIAN por su ruta:
@@ -117,7 +117,7 @@ export default function FileList({
                     await window.api.files.relocate(f.id)
                     void load()
                   } catch (e) {
-                    onToast((e as Error).message, true)
+                    onToast(errorMessage(e), true)
                   }
                 }}
               >

@@ -35,8 +35,30 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
 - **Búsqueda global** (`Ctrl+K`) de asignaturas, elementos, nombres de fichero y etiquetas,
   y opcionalmente **dentro del contenido** de los ficheros de texto indexados
   (`.java`, `.sql`, `.html`, `.md`, `.txt`…), con el número de línea y la línea encontrada.
+- **Importar una actividad desde su enlace** (Aules, Moodle u otra web): se leen el título,
+  la asignatura, la fecha de entrega, el enunciado y los adjuntos; se crea el elemento como
+  entrega pendiente y los ficheros se descargan a la carpeta del curso y se indexan.
 - **Actualizaciones automáticas** desde GitHub Releases, con botón «Buscar actualizaciones»
   en Ajustes y aviso en la barra lateral cuando hay una versión nueva descargada.
+
+## Importar desde un enlace
+
+Botón **«Importar desde enlace…»** en el Panel, en cada asignatura y en Entregas.
+
+- La página se abre en una ventana de la app con **sesión propia y persistente**. Si la
+  plataforma pide iniciar sesión, entras con tu usuario en esa ventana y la lectura sigue sola;
+  la sesión se recuerda para las siguientes importaciones. «Cerrar sesión de la plataforma»
+  (Ajustes) la borra.
+- En Moodle/Aules se leen las zonas de fechas, la descripción, el curso (de la ruta de navegación)
+  y los adjuntos (`pluginfile.php`). En otras webs, el título, los enlaces a documentos y la
+  fecha que siga a «Fecha de entrega», «Fecha límite», «Venciment», «Due»…
+- Fechas en castellano, valenciano e inglés, y en formato `dd/mm/aaaa`.
+- La asignatura se reconoce por el nombre del curso, también en valenciano («Programació»,
+  «Bases de dades»…). Si no encaja ninguna, la eliges en el formulario.
+- Antes de guardar se revisa todo. Se marcan para descargar los ficheros del enunciado; los tuyos
+  (tu entrega, la corrección) aparecen desmarcados.
+- Los ficheros se guardan en `<carpeta de descargas>/<asignatura>/<actividad>/` (por defecto
+  `Documentos/AppClase`, configurable en Ajustes).
 
 ## Desarrollo
 
@@ -80,10 +102,11 @@ src/
     files.ts    indexar rutas, abrir con el sistema, revalidar y buscar en contenido
     ipc.ts      handlers de asignaturas, temas, elementos, ficheros, búsqueda y ajustes
     updater.ts  actualizaciones automáticas desde GitHub Releases
+    importer.ts leer una actividad desde su enlace y descargar sus ficheros con la sesión
   preload/    puente seguro (contextBridge) → window.api
   renderer/   interfaz en React
   shared/     tipos compartidos entre procesos
-scripts/      prueba E2E, generador de capturas e icono
+scripts/      prueba E2E (con una plataforma falsa tipo Moodle), generador de capturas e icono
 build/        recursos del instalador (icono)
 ```
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Subject, SubjectInput } from '../../../shared/types'
+import { errorMessage } from '../util'
 import Modal from './Modal'
 
 function SubjectForm({
@@ -30,7 +31,7 @@ function SubjectForm({
             await window.api.subjects.save(form)
             onSaved()
           } catch (err) {
-            setError((err as Error).message)
+            setError(errorMessage(err))
           }
         }}
       >

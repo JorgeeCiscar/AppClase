@@ -26,7 +26,7 @@ const NAV: [View['name'], string][] = [
 
 export default function App() {
   const [view, setView] = useState<View>({ name: 'dashboard' })
-  const [settings, setSettings] = useState<Settings>({ course_name: '1º DAW', openers: [] })
+  const [settings, setSettings] = useState<Settings>({ course_name: '1º DAW', openers: [], downloads_dir: '' })
   const [toast, setToast] = useState<{ msg: string; bad: boolean } | null>(null)
 
   const showToast = useCallback((msg: string, bad = false) => {

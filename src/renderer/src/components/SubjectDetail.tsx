@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Item, ItemKind, Opener, Subject, Unit } from '../../../shared/types'
 import { ITEM_KINDS } from '../../../shared/types'
-import { KIND_LABEL } from '../util'
+import { KIND_LABEL, errorMessage } from '../util'
+import ImportButton from './ImportActivity'
 import ItemDetail from './ItemDetail'
 import ItemForm from './ItemForm'
 import ItemRow from './ItemRow'
@@ -26,7 +27,7 @@ function UnitForm({ subjectId, initial, onSaved, onClose }: { subjectId: number;
             })
             onSaved()
           } catch (err) {
-            setError((err as Error).message)
+            setError(errorMessage(err))
           }
         }}
       >
@@ -107,6 +108,7 @@ export default function SubjectDetail({
         </button>
         <h1 style={{ marginLeft: 4 }}>{subject.name}</h1>
         <button onClick={() => setUnitForm({})}>Nuevo tema</button>
+        <ImportButton defaultSubjectId={subjectId} onToast={onToast} onImported={() => void load()} />
         <button className="primary" onClick={() => setCreatingFor({ unitId: null })}>
           Nuevo elemento
         </button>

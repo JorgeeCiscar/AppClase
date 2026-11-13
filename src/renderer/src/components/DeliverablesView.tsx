@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Item, Opener, Status } from '../../../shared/types'
 import { STATUSES } from '../../../shared/types'
+import ImportButton from './ImportActivity'
 import ItemDetail from './ItemDetail'
 import ItemRow from './ItemRow'
 
@@ -28,6 +29,7 @@ export default function DeliverablesView({ openers, onToast }: { openers: Opener
     <div className="page">
       <div className="page-header">
         <h1>Entregas</h1>
+        <ImportButton className="primary" onToast={onToast} onImported={() => void load()} />
       </div>
 
       <div className="row-wrap" style={{ marginTop: 12 }}>

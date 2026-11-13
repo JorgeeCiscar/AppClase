@@ -1,3 +1,9 @@
+export function errorMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  // Electron envuelve los errores de IPC: "Error invoking remote method 'x': Error: ..."
+  return msg.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+}
+
 /** Formatea una fecha AAAA-MM-DD como «12 nov 2026». */
 export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return ''

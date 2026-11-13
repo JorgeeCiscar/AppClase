@@ -202,5 +202,16 @@ export interface Api {
   app: {
     version: () => Promise<string>
     pathForFile: (file: File) => string
+    updateStatus: () => Promise<UpdateStatus>
+    checkForUpdates: () => Promise<UpdateStatus>
+    installUpdate: () => Promise<void>
+    onUpdateStatus: (cb: (s: UpdateStatus) => void) => () => void
   }
+}
+
+export interface UpdateStatus {
+  state: 'idle' | 'disabled' | 'checking' | 'none' | 'downloading' | 'downloaded' | 'error'
+  version?: string
+  percent?: number
+  message?: string
 }

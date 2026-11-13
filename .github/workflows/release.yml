@@ -1,0 +1,80 @@
+# Pruebas en cada subida a main y publicación automática de versiones nuevas.
+# Si la versión de package.json todavía no tiene su etiqueta vX.Y.Z en GitHub:
+#   1) pasa la comprobación de tipos y la prueba E2E en Windows,
+#   2) compila el instalador en Windows y lo publica en GitHub Releases (creando la etiqueta),
+#      de donde lo descarga el actualizador automático de la app.
+name: Pruebas y publicación
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: ¿Hay una versión nueva que publicar?
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$v" > /dev/null; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"; echo "v$v ya está publicada"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"; echo "Se publicará v$v"
+          fi
+
+  # Las pruebas se ejecutan en Windows, la plataforma de destino de la app.
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx playwright install chromium
+      - name: Prueba de extremo a extremo
+        run: npm run test:e2e
+        env:
+          KEEP_E2E: '1'
+          E2E_OUT: ${{ runner.temp }}
+      - name: Guardar capturas de la prueba
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e
+          path: ${{ runner.temp }}/appclase-e2e-*/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    needs: [check, test]
+    if: needs.check.outputs.publish == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx electron-vite build
+      - name: Compilar y publicar el instalador
+        run: npx electron-builder --win --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

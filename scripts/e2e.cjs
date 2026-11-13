@@ -142,16 +142,17 @@ function check(name, ok, detail = '') {
     )
 
     // --- «Abrir con»: se lanza un programa de verdad y se comprueba que recibe la ruta ---
+    // El «programa» es Node ejecutando un script que escribe la ruta que recibe:
+    // así la prueba funciona igual en Windows (donde corre la CI) y en Linux.
     const probeOut = path.join(S, 'abierto.txt')
-    const probe = path.join(S, 'programa-falso.sh')
-    fs.writeFileSync(probe, `#!/bin/sh\nprintf '%s' "$1" > ${probeOut}\n`)
-    fs.chmodSync(probe, 0o755)
+    const probe = path.join(S, 'programa-falso.cjs')
+    fs.writeFileSync(probe, `require('fs').writeFileSync(${JSON.stringify(probeOut)}, process.argv[2])\n`)
     const openedWith = await win.evaluate(
-      async ([cmd, id]) => {
-        await window.api.settings.save({ openers: [{ name: 'Programa de prueba', command: cmd, args: '' }] })
+      async ([cmd, args, id]) => {
+        await window.api.settings.save({ openers: [{ name: 'Programa de prueba', command: cmd, args }] })
         return window.api.files.openWith(id, 0)
       },
-      [probe, javaId]
+      [process.execPath, probe, javaId]
     )
     check('«Abrir con» lanza el programa configurado', openedWith.ok === true, JSON.stringify(openedWith))
     for (let i = 0; i < 50 && !fs.existsSync(probeOut); i++) await new Promise((r) => setTimeout(r, 100))
@@ -184,6 +185,19 @@ function check(name, ok, detail = '') {
     check('el panel cuenta el fichero que falta', panelMissing === 1, String(panelMissing))
 
     await win.screenshot({ path: path.join(S, 'shots', 'panel.png') })
+
+    // --- actualizaciones: sin empaquetar, el botón existe pero está desactivado ---
+    await win.click('.sidebar nav button:has-text("Ajustes")')
+    await win.waitForSelector('.update-row')
+    const updateBtn = win.locator('.update-row button:has-text("Buscar actualizaciones")')
+    check('Ajustes muestra el botón «Buscar actualizaciones»', (await updateBtn.count()) === 1)
+    check('fuera de la app instalada el botón está desactivado', await updateBtn.isDisabled())
+    const updateText = await win.locator('.update-row').textContent()
+    check(
+      'y explica por qué',
+      /solo funcionan en la app instalada/.test(updateText || ''),
+      (updateText || '').replace(/\s+/g, ' ').trim()
+    )
 
     check('sin errores de JavaScript en la interfaz', errors.length === 0, errors.join(' | '))
     await app.close()

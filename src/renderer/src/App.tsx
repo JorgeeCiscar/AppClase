@@ -6,6 +6,7 @@ import SearchView from './components/SearchView'
 import SettingsView from './components/SettingsView'
 import SubjectDetail from './components/SubjectDetail'
 import SubjectsView from './components/SubjectsView'
+import UpdateBanner, { AppVersion } from './components/UpdateBanner'
 
 type View =
   | { name: 'dashboard' }
@@ -27,7 +28,6 @@ export default function App() {
   const [view, setView] = useState<View>({ name: 'dashboard' })
   const [settings, setSettings] = useState<Settings>({ course_name: '1º DAW', openers: [] })
   const [toast, setToast] = useState<{ msg: string; bad: boolean } | null>(null)
-  const [version, setVersion] = useState('')
 
   const showToast = useCallback((msg: string, bad = false) => {
     setToast({ msg, bad })
@@ -36,7 +36,6 @@ export default function App() {
 
   useEffect(() => {
     void window.api.settings.get().then(setSettings)
-    void window.api.app.version().then(setVersion)
   }, [])
 
   useEffect(() => {
@@ -71,7 +70,10 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="version">{version && `v${version}`}</div>
+        <div className="sidebar-bottom">
+          <UpdateBanner />
+          <AppVersion />
+        </div>
       </aside>
 
       <main className="content">

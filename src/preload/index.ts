@@ -2,6 +2,13 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { Api } from '../shared/types'
 
 const invoke = (channel: string) => (...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
+function subscribe<T>(channel: string, cb: (p: T) => void): () => void {
+  const listener = (_e: unknown, p: T): void => cb(p)
+  ipcRenderer.on(channel, listener)
+  return () => {
+    ipcRenderer.removeListener(channel, listener)
+  }
+}
 
 const api: Api = {
   subjects: {
@@ -43,7 +50,11 @@ const api: Api = {
   app: {
     version: invoke('app:version'),
     // Electron 32 quitó File.path: la ruta de un fichero soltado se obtiene así.
-    pathForFile: (file: File) => webUtils.getPathForFile(file)
+    pathForFile: (file: File) => webUtils.getPathForFile(file),
+    updateStatus: invoke('update:status'),
+    checkForUpdates: invoke('update:check'),
+    installUpdate: invoke('update:install'),
+    onUpdateStatus: (cb) => subscribe('update:status', cb)
   }
 } as Api
 

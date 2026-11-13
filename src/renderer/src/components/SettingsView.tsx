@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Opener, Settings } from '../../../shared/types'
+import { describeUpdate, useUpdateStatus } from './UpdateBanner'
 
 /**
  * Ajustes: nombre del curso y programas para «Abrir con».
@@ -15,6 +16,7 @@ export default function SettingsView({
 }) {
   const [settings, setSettings] = useState<Settings | undefined>()
   const [version, setVersion] = useState('')
+  const update = useUpdateStatus()
 
   useEffect(() => {
     void window.api.settings.get().then(setSettings)
@@ -93,6 +95,28 @@ export default function SettingsView({
         <button onClick={() => setSettings({ ...settings, openers: [...settings.openers, { name: '', command: '', args: '' }] })}>
           Añadir programa
         </button>
+      </div>
+
+      <h2>Actualizaciones</h2>
+      <div className="update-row">
+        <div>
+          <div>
+            AppClase <strong>v{version}</strong>
+          </div>
+          <div className="muted small">{describeUpdate(update)}</div>
+        </div>
+        {update.state === 'downloaded' ? (
+          <button className="primary" onClick={() => void window.api.app.installUpdate()}>
+            Reiniciar y actualizar
+          </button>
+        ) : (
+          <button
+            onClick={() => void window.api.app.checkForUpdates()}
+            disabled={['checking', 'downloading', 'disabled'].includes(update.state)}
+          >
+            Buscar actualizaciones
+          </button>
+        )}
       </div>
 
       <h2>Mantenimiento</h2>

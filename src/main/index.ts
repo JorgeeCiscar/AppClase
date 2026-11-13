@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { openDatabase } from './db'
 import { registerIpc } from './ipc'
+import { setupUpdater } from './updater'
 
 const dataDir = process.env.APPCLASE_DATA_DIR ?? join(app.getPath('userData'), 'datos')
 
@@ -36,6 +37,7 @@ app.whenReady().then(() => {
   mkdirSync(dataDir, { recursive: true })
   const db = openDatabase(join(dataDir, 'appclase.db'))
   registerIpc(db)
+  setupUpdater()
   createWindow()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
   app.on('will-quit', () => db.close())

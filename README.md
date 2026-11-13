@@ -35,6 +35,8 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
 - **Búsqueda global** (`Ctrl+K`) de asignaturas, elementos, nombres de fichero y etiquetas,
   y opcionalmente **dentro del contenido** de los ficheros de texto indexados
   (`.java`, `.sql`, `.html`, `.md`, `.txt`…), con el número de línea y la línea encontrada.
+- **Actualizaciones automáticas** desde GitHub Releases, con botón «Buscar actualizaciones»
+  en Ajustes y aviso en la barra lateral cuando hay una versión nueva descargada.
 
 ## Desarrollo
 
@@ -49,7 +51,25 @@ npm run dist:win     # genera dist/AppClase-Setup-<versión>.exe
 - En Linux sin pantalla: `xvfb-run -a npm run test:e2e`. `KEEP_E2E=1` conserva el
   directorio temporal con la base de datos y las capturas.
 - `scripts/demo.cjs <carpeta>` siembra datos de ejemplo y guarda capturas de la app.
-- `dist:win` desde Linux necesita Wine; en Windows funciona directamente.
+- `scripts/make-icon.cjs` regenera `build/icon.png`.
+- `dist:win` desde Linux necesita Wine (`dpkg --add-architecture i386` y luego
+  `apt install wine wine32:i386 wine64`). En Windows funciona directamente.
+- El instalador no está firmado digitalmente: Windows SmartScreen mostrará «Editor desconocido».
+
+## Actualizaciones automáticas
+
+La app instalada busca versiones nuevas en GitHub Releases al arrancar y cada 4 horas. Las descarga
+en segundo plano y las instala al cerrarse (o con «Reiniciar y actualizar»). En Ajustes hay un botón
+«Buscar actualizaciones». El repositorio debe ser **público** para que la app pueda leer las versiones.
+
+Para publicar una versión nueva:
+
+```bash
+npm run release    # sube la versión (0.1.0 → 0.1.1) en package.json, hace commit y push a main
+```
+
+En cada push a `main`, `.github/workflows/release.yml` pasa las pruebas en Windows. Si la versión de
+`package.json` aún no está publicada, compila el instalador y lo publica en Releases con la etiqueta `vX.Y.Z`.
 
 ## Estructura
 
@@ -59,10 +79,12 @@ src/
     db.ts       esquema, migraciones y siembra de las asignaturas
     files.ts    indexar rutas, abrir con el sistema, revalidar y buscar en contenido
     ipc.ts      handlers de asignaturas, temas, elementos, ficheros, búsqueda y ajustes
+    updater.ts  actualizaciones automáticas desde GitHub Releases
   preload/    puente seguro (contextBridge) → window.api
   renderer/   interfaz en React
   shared/     tipos compartidos entre procesos
-scripts/      prueba E2E y generador de capturas
+scripts/      prueba E2E, generador de capturas e icono
+build/        recursos del instalador (icono)
 ```
 
 ## Datos

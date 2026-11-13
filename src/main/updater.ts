@@ -46,10 +46,10 @@ export function setupUpdater(): void {
   autoUpdater.on('download-progress', (p) =>
     broadcast({ state: 'downloading', version: status.version, percent: Math.round(p.percent) })
   )
-  autoUpdater.on('update-not-available', () => broadcast({ state: 'none' }))
+  autoUpdater.on('update-not-available', () => broadcast({ state: 'none', checkedAt: new Date().toISOString() }))
   autoUpdater.on('update-downloaded', (i) => broadcast({ state: 'downloaded', version: i.version }))
   autoUpdater.on('error', (err) =>
-    broadcast({ state: 'error', message: friendlyError(err?.message ?? String(err)) })
+    broadcast({ state: 'error', message: friendlyError(err?.message ?? String(err)), checkedAt: new Date().toISOString() })
   )
 
   setTimeout(() => void check(false), 10_000)
@@ -64,7 +64,13 @@ async function check(manual: boolean): Promise<UpdateStatus> {
     await autoUpdater.checkForUpdates()
   } catch (err) {
     // Sin conexión, etc.: solo se muestra si el usuario lo pidió.
-    if (manual) broadcast({ state: 'error', message: friendlyError(err instanceof Error ? err.message : String(err)) })
+    if (manual) {
+      broadcast({
+        state: 'error',
+        message: friendlyError(err instanceof Error ? err.message : String(err)),
+        checkedAt: new Date().toISOString()
+      })
+    }
   }
   return status
 }

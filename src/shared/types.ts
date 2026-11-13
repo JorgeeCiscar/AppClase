@@ -254,4 +254,6 @@ export interface UpdateStatus {
   version?: string
   percent?: number
   message?: string
+  /** Cuándo terminó la última comprobación (ISO), para que cada pulsación se note. */
+  checkedAt?: string
 }

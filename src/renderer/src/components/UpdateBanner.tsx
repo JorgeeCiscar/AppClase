@@ -10,18 +10,22 @@ export function useUpdateStatus(): UpdateStatus {
   return status
 }
 
+const timeOf = (iso?: string): string =>
+  iso ? new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''
+
 export function describeUpdate(s: UpdateStatus): string {
+  const at = timeOf(s.checkedAt)
   switch (s.state) {
     case 'checking':
       return 'Buscando actualizaciones…'
     case 'none':
-      return 'Tienes la última versión'
+      return at ? `Tienes la última versión · comprobado a las ${at}` : 'Tienes la última versión'
     case 'downloading':
       return `Descargando la versión ${s.version ?? ''}… ${s.percent ?? 0} %`
     case 'downloaded':
       return `Versión ${s.version} lista para instalar`
     case 'error':
-      return `No se pudo comprobar: ${s.message ?? 'error desconocido'}`
+      return `No se pudo comprobar${at ? ` (${at})` : ''}: ${s.message ?? 'error desconocido'}`
     case 'disabled':
       return s.message ?? 'Actualizaciones desactivadas'
     default:

@@ -6,6 +6,7 @@ import SearchView from './components/SearchView'
 import SettingsView from './components/SettingsView'
 import SubjectDetail from './components/SubjectDetail'
 import SubjectsView from './components/SubjectsView'
+import NavIcon from './components/NavIcon'
 import UpdateBanner, { AppVersion } from './components/UpdateBanner'
 
 type View =
@@ -62,10 +63,12 @@ export default function App() {
           {NAV.map(([name, label]) => (
             <button
               key={name}
+              data-nav={name}
               className={active === name ? 'active' : ''}
               onClick={() => setView({ name } as View)}
             >
-              {label}
+              <NavIcon name={name} />
+              <span className="nav-label">{label}</span>
               {name === 'search' && <span className="count">Ctrl+K</span>}
             </button>
           ))}

@@ -58,6 +58,8 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
 .sidebar nav button { text-align: left; background: transparent; border: none; padding: 9px 10px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
 .sidebar nav button.active { background: var(--panel-2); color: var(--text); }
 .sidebar nav button .count { margin-left: auto; font-size: 11px; color: var(--muted); }
+/* Los iconos del menú están listos para las disposiciones que los usen; en la actual no se ven. */
+.nav-icon { display: none; flex-shrink: 0; }
 .sidebar-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
 .app-version { padding: 0 8px; }
 .update-banner { padding: 10px; border-radius: 8px; background: var(--panel-2); display: flex; flex-direction: column; gap: 6px; }

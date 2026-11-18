@@ -1,7 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { Item, ItemInput, ItemKind, Status, Subject, Unit } from '../../../shared/types'
+import type { DetectedUnit, Item, ItemInput, ItemKind, Status, Subject, Unit } from '../../../shared/types'
 import { ITEM_KINDS, STATUSES } from '../../../shared/types'
+import { findUnit } from '../../../shared/match'
 import { KIND_LABEL, errorMessage } from '../util'
+
+/** Valor del desplegable para «la unidad leída de la plataforma, que aún no existe». */
+const NEW_UNIT = -1
+const unitLabel = (u: { number: number | null; title: string }): string =>
+  `${u.number !== null ? `${u.number}. ` : ''}${u.title}`
 import Modal from './Modal'
 import TagInput from './TagInput'
 
@@ -17,6 +23,7 @@ export default function ItemForm({
   footer,
   extraActions,
   cancelLabel = 'Cancelar',
+  pendingUnit,
   onSaved,
   onClose
 }: {
@@ -34,6 +41,8 @@ export default function ItemForm({
   /** Botones extra a la izquierda de «Cancelar» (p. ej. «Saltar esta»). */
   extraActions?: ReactNode
   cancelLabel?: string
+  /** Unidad leída de la plataforma: se preselecciona si existe o se ofrece como nueva. */
+  pendingUnit?: DetectedUnit | null
   /** Puede ser asíncrono: el formulario sigue en «Guardando…» hasta que termina. */
   onSaved: (i: Item) => void | Promise<void>
   onClose: () => void
@@ -60,13 +69,21 @@ export default function ItemForm({
     void window.api.tags().then(setSuggestions)
   }, [])
 
-  // Al cambiar de asignatura cambian los temas disponibles.
+  // Al cambiar de asignatura cambian las unidades disponibles. Si hay una unidad leída
+  // de la plataforma, se busca en la asignatura; si no está, se ofrece como nueva.
   useEffect(() => {
     let alive = true
     void window.api.units.list(form.subject_id).then((u) => {
       if (!alive) return
       setSubjectUnits(u)
-      if (form.unit_id && !u.some((x) => x.id === form.unit_id)) setForm((f) => ({ ...f, unit_id: null }))
+      setForm((f) => {
+        const known = f.unit_id !== null && f.unit_id !== undefined && u.some((x) => x.id === f.unit_id)
+        if (pendingUnit && !known) {
+          const found = findUnit(u, pendingUnit)
+          return { ...f, unit_id: found ? found.id : NEW_UNIT }
+        }
+        return known || f.unit_id === null ? f : { ...f, unit_id: null }
+      })
     })
     return () => {
       alive = false
@@ -80,9 +97,11 @@ export default function ItemForm({
     setSaving(true)
     setError('')
     try {
-      const saved = await window.api.items.save(form)
+      const payload: ItemInput =
+        form.unit_id === NEW_UNIT ? { ...form, unit_id: null, new_unit: pendingUnit ?? null } : form
+      const saved = await window.api.items.save(payload)
       // Si algo falla después, volver a guardar actualiza este elemento en vez de duplicarlo.
-      setForm((f) => ({ ...f, id: saved.id }))
+      setForm((f) => ({ ...f, id: saved.id, unit_id: saved.unit_id }))
       await onSaved(saved)
     } catch (err) {
       setError(errorMessage(err))
@@ -114,19 +133,21 @@ export default function ItemForm({
             </select>
           </label>
           <label className="field">
-            Tema
+            Unidad
             <select
               name="unit_id"
               value={form.unit_id ?? ''}
               onChange={(e) => set('unit_id', e.target.value ? Number(e.target.value) : null)}
             >
-              <option value="">— sin tema —</option>
+              <option value="">— sin unidad —</option>
               {subjectUnits.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.number !== null ? `${u.number}. ` : ''}
-                  {u.title}
+                  {unitLabel(u)}
                 </option>
               ))}
+              {pendingUnit && !findUnit(subjectUnits, pendingUnit) && (
+                <option value={NEW_UNIT}>{unitLabel(pendingUnit)} (nueva)</option>
+              )}
             </select>
           </label>
           <label className="field">

@@ -3,7 +3,9 @@
 // - la tarea está dentro de <div class="activity-header" data-for="page-activity-header">,
 // - id=7: calificada, en valenciano, con texto, imagen y adjuntos del profesor, un
 //   fichero fuera de la cabecera que no debe recogerse, y tu archivo enviado,
-// - id=8: sin calificar, en castellano, solo texto, con una entrega tuya que no se recoge,
+// - id=8: enviada para calificar (sin calificar), en castellano, solo texto, unidad «UD 3 - Arrays»,
+//   con una entrega tuya que no se recoge,
+// - id=9: borrador, unidad como texto sin enlace y un enunciado que dice «será calificado»,
 // - los adjuntos solo se descargan con la sesión iniciada.
 // Además sirve una página genérica (no Moodle, sin cabecera) en castellano.
 const http = require('node:http')
@@ -31,6 +33,7 @@ const ASSIGN = page(
   'path-mod-assign pagelayout-incourse',
   `<nav aria-label="Barra de navegació"><ol class="breadcrumb">
      <li><a href="/course/view.php?id=55">Programació (1r DAW)</a></li>
+     <li><a href="/course/section.php?id=201">Unitat 1: Estructures de control</a></li>
      <li><a href="/mod/assign/view.php?id=7">Tasca 3: bucles</a></li>
    </ol></nav>
    <div id="page-header"><div class="page-header-headings"><h1>Tasca 3: bucles</h1></div></div>
@@ -74,6 +77,8 @@ const ASSIGN_TEXT = page(
   'path-mod-assign pagelayout-incourse',
   `<nav aria-label="Ruta de navegación"><ol class="breadcrumb">
      <li><a href="/course/view.php?id=56">Programación (1º DAW)</a></li>
+     <li><a href="/course/view.php?id=56#section-3">UD 3 - Arrays</a></li>
+     <li><a href="/mod/assign/view.php?id=8">Tarea 4: arrays</a></li>
    </ol></nav>
    <div id="page-header"><div class="page-header-headings"><h1>Tarea 4: arrays</h1></div></div>
    <div id="region-main">
@@ -97,6 +102,38 @@ const ASSIGN_TEXT = page(
        <tr><th>Estado de la entrega</th><td>Enviado para calificar</td></tr>
        <tr><th>Estado de la calificación</th><td>Sin calificar</td></tr>
        <tr><th>Envío de archivos</th><td><a href="/pluginfile.php/124/assignsubmission_file/submission_files/10/entrega-arrays.zip?forcedownload=1">entrega-arrays.zip</a></td></tr>
+     </table>
+   </div>`
+)
+
+// Tarea en BORRADOR, en castellano: la unidad aparece en la ruta como texto sin enlace,
+// y el enunciado dice «será calificado» (no debe tomarse por una tarea calificada).
+const ASSIGN_DRAFT = page(
+  'Programación (1º DAW): Tarea 5: funciones',
+  'path-mod-assign pagelayout-incourse',
+  `<nav aria-label="Ruta de navegación"><ol class="breadcrumb">
+     <li><a href="/course/view.php?id=56">Programación (1º DAW)</a></li>
+     <li><span>Tema 4. Funciones</span></li>
+     <li><a href="/mod/assign/view.php?id=9">Tarea 5: funciones</a></li>
+   </ol></nav>
+   <div id="page-header"><div class="page-header-headings"><h1>Tarea 5: funciones</h1></div></div>
+   <div id="region-main">
+     <div class="activity-header" data-for="page-activity-header">
+       <div data-region="activity-information" class="activity-information">
+         <div class="completion-info" data-region="completionrequirements">
+           <div class="badge">Para hacer: Hacer un envío</div>
+         </div>
+         <div data-region="activity-dates" class="activity-dates">
+           <div><strong>Pendiente:</strong> viernes, 4 de diciembre de 2026, 23:59</div>
+         </div>
+       </div>
+       <div class="activity-description" id="intro">
+         <div class="no-overflow"><p>Escribe una función que calcule el factorial. Este ejercicio será calificado sobre 10.</p></div>
+       </div>
+     </div>
+     <table class="generaltable submissionstatustable">
+       <tr><th>Estado de la entrega</th><td>Borrador (no enviado)</td></tr>
+       <tr><th>Estado de la calificación</th><td>Sin calificar</td></tr>
      </table>
    </div>`
 )
@@ -136,7 +173,8 @@ function startFakePlatform() {
     if (u.pathname === '/my/') return logged ? send(200, html, DASHBOARD) : toLogin()
     if (u.pathname === '/mod/assign/view.php') {
       if (!logged) return toLogin()
-      return send(200, html, u.searchParams.get('id') === '8' ? ASSIGN_TEXT : ASSIGN)
+      const id = u.searchParams.get('id')
+      return send(200, html, id === '8' ? ASSIGN_TEXT : id === '9' ? ASSIGN_DRAFT : ASSIGN)
     }
     if (u.pathname.startsWith('/pluginfile.php/')) {
       if (!logged) return toLogin()

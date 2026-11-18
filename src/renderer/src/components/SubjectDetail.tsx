@@ -13,7 +13,7 @@ function UnitForm({ subjectId, initial, onSaved, onClose }: { subjectId: number;
   const [title, setTitle] = useState(initial?.title ?? '')
   const [error, setError] = useState('')
   return (
-    <Modal title={initial ? 'Editar tema' : 'Nuevo tema'} onClose={onClose}>
+    <Modal title={initial ? 'Editar unidad' : 'Nueva unidad'} onClose={onClose}>
       <form
         className="form"
         onSubmit={async (e) => {
@@ -107,7 +107,7 @@ export default function SubjectDetail({
           ← Asignaturas
         </button>
         <h1 style={{ marginLeft: 4 }}>{subject.name}</h1>
-        <button onClick={() => setUnitForm({})}>Nuevo tema</button>
+        <button onClick={() => setUnitForm({})}>Nueva unidad</button>
         <ImportButton defaultSubjectId={subjectId} onToast={onToast} onImported={() => void load()} />
         <button className="primary" onClick={() => setCreatingFor({ unitId: null })}>
           Nuevo elemento
@@ -134,7 +134,7 @@ export default function SubjectDetail({
           <section key={unit?.id ?? 'none'}>
             <h2 className="row">
               <span style={{ flex: 1 }}>
-                {unit ? `${unit.number !== null ? unit.number + '. ' : ''}${unit.title}` : 'Sin tema'}
+                {unit ? `${unit.number !== null ? unit.number + '. ' : ''}${unit.title}` : 'Sin unidad'}
               </span>
               {unit && (
                 <>
@@ -147,7 +147,7 @@ export default function SubjectDetail({
                   <button
                     className="tiny ghost danger"
                     onClick={async () => {
-                      if (!window.confirm(`¿Borrar el tema «${unit.title}»? Sus elementos quedarán sin tema.`)) return
+                      if (!window.confirm(`¿Borrar la unidad «${unit.title}»? Sus elementos quedarán sin unidad.`)) return
                       await window.api.units.remove(unit.id)
                       void load()
                     }}
@@ -158,7 +158,7 @@ export default function SubjectDetail({
               )}
             </h2>
             {list.length === 0 ? (
-              <p className="muted small">Sin elementos en este tema.</p>
+              <p className="muted small">Sin elementos en esta unidad.</p>
             ) : (
               <div className="list">
                 {list.map((i) => (

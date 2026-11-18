@@ -64,6 +64,7 @@ export default function App() {
             <button
               key={name}
               data-nav={name}
+              title={name === 'search' ? 'Buscar en todo el curso (Ctrl+K)' : undefined}
               className={active === name ? 'active' : ''}
               onClick={() => setView({ name } as View)}
             >
@@ -81,7 +82,7 @@ export default function App() {
 
       <main className="content">
         {view.name === 'dashboard' && (
-          <Dashboard openers={settings.openers} onToast={showToast} courseName={settings.course_name} />
+          <Dashboard openers={settings.openers} onToast={showToast} />
         )}
         {view.name === 'subjects' && <SubjectsView onOpen={(id) => setView({ name: 'subject', id })} />}
         {view.name === 'subject' && (

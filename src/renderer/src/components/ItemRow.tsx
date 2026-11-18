@@ -1,5 +1,5 @@
 import type { Item } from '../../../shared/types'
-import { KIND_LABEL, dueLabel, fmtDate } from '../util'
+import { KIND_LABEL, URGENCY_LABEL, dueLabel, fmtDate, urgencyOf } from '../util'
 
 const statusClass = (s: string | null): string => (s ? `status-${s.replace(/\s+/g, '')}` : '')
 
@@ -13,11 +13,9 @@ export default function ItemRow({
   onOpen: (i: Item) => void
   showSubject?: boolean
 }) {
-  const overdue = item.due_date && item.status && ['pendiente', 'en curso'].includes(item.status)
-    ? new Date(item.due_date) < new Date(new Date().toDateString())
-    : false
-  const soon = !overdue && item.due_date
-  // Asignatura, tema y ficheros, unidos con « · » solo entre los que haya.
+  // El color de la fila cambia según se acerca la fecha de entrega.
+  const urgency = urgencyOf(item.due_date, item.status)
+  // Asignatura, unidad y ficheros, unidos con « · » solo entre los que haya.
   const sub = [
     showSubject ? item.subject_name : null,
     item.unit_title ? `${item.unit_number !== null ? item.unit_number + '. ' : ''}${item.unit_title}` : null,
@@ -28,7 +26,12 @@ export default function ItemRow({
     .join(' · ')
 
   return (
-    <div className="list-row clickable" onClick={() => onOpen(item)}>
+    <div
+      className={`list-row clickable${urgency ? ` urg urg-${urgency}` : ''}`}
+      data-urgency={urgency ?? undefined}
+      title={urgency ? URGENCY_LABEL[urgency] : undefined}
+      onClick={() => onOpen(item)}
+    >
       <span className="badge kind">{KIND_LABEL[item.kind] ?? item.kind}</span>
       <div className="col">
         <div className="title">{item.title}</div>
@@ -41,7 +44,7 @@ export default function ItemRow({
       ))}
       {item.grade !== null && <span className="badge">{item.grade}</span>}
       {item.due_date && (
-        <span className={`small ${overdue ? 'due-over' : soon ? 'due-soon' : 'muted'}`}>
+        <span className="small due">
           {fmtDate(item.due_date)} ({dueLabel(item.due_date)})
         </span>
       )}

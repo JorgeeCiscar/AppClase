@@ -89,6 +89,17 @@ export type ItemInput = {
   status?: Status | null
   grade?: number | null
   tags?: string[]
+  /**
+   * Unidad leída de la plataforma: si unit_id es null, al guardar se busca en la
+   * asignatura (por número o por nombre) y, si no existe, se crea.
+   */
+  new_unit?: DetectedUnit | null
+}
+
+/** Unidad leída de la plataforma («UD 3 - Arrays» → 3, «Arrays»). */
+export interface DetectedUnit {
+  number: number | null
+  title: string
 }
 
 export interface ItemFilter {
@@ -146,6 +157,10 @@ export interface ScrapedActivity {
   due_raw: string | null
   /** La tarea aparece como calificada: entonces también se recoge tu archivo enviado. */
   graded: boolean
+  /** Estado de tu entrega según la plataforma, y el texto tal como aparece allí. */
+  submission: { status: Status; label: string } | null
+  /** Unidad de la actividad dentro de la asignatura, si la plataforma la indica. */
+  unit: DetectedUnit | null
   files: ActivityFile[]
 }
 

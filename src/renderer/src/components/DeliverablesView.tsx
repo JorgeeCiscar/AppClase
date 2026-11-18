@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Item, Opener, Status, Subject } from '../../../shared/types'
 import { STATUSES } from '../../../shared/types'
-import { today } from '../util'
+import { URGENCY_LABEL, URGENCY_ORDER, today } from '../util'
 import ImportButton from './ImportActivity'
 import ItemDetail from './ItemDetail'
 import ItemRow from './ItemRow'
@@ -53,6 +53,37 @@ function groupBySubject(items: Item[], subjects: Subject[]): Group[] {
   return [...groups.values()].sort(
     (a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity) || a.name.localeCompare(b.name, 'es')
   )
+}
+
+interface UnitGroup {
+  key: string
+  label: string | null
+  items: Item[]
+}
+
+/**
+ * Dentro de una asignatura, las entregas se agrupan por unidad (por número de
+ * unidad) y las que no tienen unidad van al final. Sin unidades, un solo grupo.
+ */
+function groupByUnit(items: Item[]): UnitGroup[] {
+  if (!items.some((i) => i.unit_id !== null)) return [{ key: 'todas', label: null, items }]
+  const map = new Map<string, UnitGroup & { number: number | null }>()
+  for (const i of items) {
+    const key = i.unit_id === null ? 'sin' : String(i.unit_id)
+    let g = map.get(key)
+    if (!g) {
+      const label =
+        i.unit_id === null ? 'Sin unidad' : `${i.unit_number !== null ? `${i.unit_number}. ` : ''}${i.unit_title ?? ''}`
+      g = { key, label, items: [], number: i.unit_id === null ? null : i.unit_number }
+      map.set(key, g)
+    }
+    g.items.push(i)
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.key === 'sin' || b.key === 'sin') return a.key === 'sin' ? 1 : -1
+    if (a.number === null || b.number === null) return a.number === null ? 1 : -1
+    return a.number - b.number || (a.label ?? '').localeCompare(b.label ?? '', 'es')
+  })
 }
 
 export default function DeliverablesView({ openers, onToast }: { openers: Opener[]; onToast: (m: string, bad?: boolean) => void }) {
@@ -115,6 +146,13 @@ export default function DeliverablesView({ openers, onToast }: { openers: Opener
           solo fuera de plazo
         </label>
       </div>
+      <div className="urg-legend" aria-label="Colores según el plazo">
+        {URGENCY_ORDER.map((u) => (
+          <span key={u} className={`urg-${u}`}>
+            {URGENCY_LABEL[u]}
+          </span>
+        ))}
+      </div>
 
       {items.length === 0 ? (
         <p className="empty">Nada con fecha límite que cumpla el filtro.</p>
@@ -136,11 +174,16 @@ export default function DeliverablesView({ openers, onToast }: { openers: Opener
                   {overdue > 0 && <span className="due-over"> · {overdue} fuera de plazo</span>}
                 </span>
               </h2>
-              <div className="list">
-                {g.items.map((i) => (
-                  <ItemRow key={i.id} item={i} onOpen={open} />
-                ))}
-              </div>
+              {groupByUnit(g.items).map((u) => (
+                <div key={u.key} className="unit-group" data-unit={u.label ?? undefined}>
+                  {u.label && <div className="unit-group-title">{u.label}</div>}
+                  <div className="list">
+                    {u.items.map((i) => (
+                      <ItemRow key={i.id} item={i} onOpen={open} />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </section>
           )
         })

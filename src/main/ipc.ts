@@ -10,6 +10,7 @@ import {
   addPaths, chooseFiles, chooseFolder, openFile, openWith, relocate, revalidate, reveal, searchContent
 } from './files'
 import { cancelRead, downloadFiles, logoutPlatform, readActivity } from './importer'
+import { findUnit } from '../shared/match'
 
 const SEP = String.fromCharCode(31) // separador para group_concat de etiquetas
 
@@ -91,7 +92,7 @@ export function saveSubject(db: DB, s: SubjectInput): Subject {
 
 export function saveUnit(db: DB, u: UnitInput): Unit {
   const title = nullIfEmpty(u.title)
-  if (!title) throw new Error('El título del tema es obligatorio')
+  if (!title) throw new Error('El título de la unidad es obligatorio')
   if (!db.prepare('SELECT id FROM subjects WHERE id = ?').get(u.subject_id)) {
     throw new Error('La asignatura no existe')
   }
@@ -124,13 +125,30 @@ export function saveItem(db: DB, i: ItemInput): Item {
   let unitId: number | null = null
   if (i.unit_id) {
     const u = db.prepare('SELECT id FROM units WHERE id = ? AND subject_id = ?').get(i.unit_id, i.subject_id)
-    if (!u) throw new Error('El tema elegido no pertenece a esa asignatura')
+    if (!u) throw new Error('La unidad elegida no pertenece a esa asignatura')
     unitId = i.unit_id
   }
+  const newUnit = !unitId && i.new_unit && nullIfEmpty(i.new_unit.title) ? i.new_unit : null
   const grade = i.grade === null || i.grade === undefined || String(i.grade) === '' ? null : Number(i.grade)
   if (grade !== null && (Number.isNaN(grade) || grade < 0 || grade > 10)) throw new Error('La nota debe estar entre 0 y 10')
 
   const id = transaction(db, () => {
+    // Unidad leída de la plataforma: se reutiliza la de la asignatura o se crea.
+    if (newUnit) {
+      const units = db.prepare('SELECT id, number, title FROM units WHERE subject_id = ?').all(i.subject_id) as {
+        id: number
+        number: number | null
+        title: string
+      }[]
+      const found = findUnit(units, newUnit)
+      unitId = found
+        ? found.id
+        : Number(
+            db
+              .prepare('INSERT INTO units (subject_id, number, title) VALUES (?, ?, ?)')
+              .run(i.subject_id, newUnit.number, String(newUnit.title).trim().slice(0, 120)).lastInsertRowid
+          )
+    }
     let itemId = i.id
     if (itemId) {
       db.prepare(

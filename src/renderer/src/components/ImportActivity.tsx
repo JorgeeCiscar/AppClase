@@ -295,6 +295,18 @@ function ImportDialog({
           · <strong>no se encontró la fecha de entrega</strong>, revísala
         </>
       )}
+      {act.unit && (
+        <>
+          {' '}
+          · unidad <strong data-detected="unit">{act.unit.number !== null ? `${act.unit.number}. ` : ''}{act.unit.title}</strong>
+        </>
+      )}
+      {act.submission && (
+        <>
+          {' '}
+          · estado de la entrega: «{act.submission.label}» → <strong data-detected="status">{act.submission.status}</strong>
+        </>
+      )}
       {act.graded && (
         <>
           {' '}
@@ -356,9 +368,10 @@ function ImportDialog({
         notes,
         url: act.url,
         due_date: act.due_date ?? '',
-        // Una tarea ya calificada no está pendiente: si no, saldría «fuera de plazo» en el Panel.
-        status: act.graded ? 'corregida' : 'pendiente'
+        // El estado que tenga tu entrega en la plataforma; si no dice nada, pendiente.
+        status: act.submission?.status ?? 'pendiente'
       }}
+      pendingUnit={act.unit}
       header={header}
       footer={footer}
       cancelLabel={multi ? 'Terminar aquí' : 'Cancelar'}

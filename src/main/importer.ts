@@ -1,7 +1,8 @@
 import { BrowserWindow, session } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
-import type { ActivityFile, DownloadResult, FileSection, ScrapedActivity } from '../shared/types'
+import type { ActivityFile, DownloadResult, FileSection, ScrapedActivity, Status } from '../shared/types'
+import { parseUnit } from '../shared/match'
 import { FILE_SECTION_LABEL } from '../shared/types'
 import type { DB } from './db'
 import { addPaths } from './files'
@@ -43,8 +44,19 @@ const EXTRACT = String.raw`(() => {
 
   let course = '';
   const links = Array.from(document.querySelectorAll('.breadcrumb a, nav a'));
-  const courseLink = links.find((a) => /course\/view\.php/.test(a.getAttribute('href') || ''));
+  const isSectionHref = (h) => /course\/section\.php|#section-\d+|[?&]section=\d+/.test(h || '');
+  const courseLink = links.find((a) => /course\/view\.php/.test(a.getAttribute('href') || '') && !isSectionHref(a.getAttribute('href')));
   if (courseLink) course = txt(courseLink);
+
+  // Sección (unidad) de la actividad: en la ruta de navegación, entre el curso y la actividad.
+  let section = '';
+  const sectionLink = links.find((a) => isSectionHref(a.getAttribute('href')));
+  if (sectionLink) section = txt(sectionLink);
+  else {
+    const crumbs = Array.from(document.querySelectorAll('.breadcrumb li'));
+    const ci = crumbs.findIndex((li) => li.querySelector('a[href*="course/view.php"]'));
+    if (ci >= 0 && crumbs.length - ci > 2) section = txt(crumbs[crumbs.length - 2]);
+  }
   if (!course) {
     const parts = docTitle.split(/\s[:|]\s|:\s/);
     if (parts.length > 1) course = parts[0].trim();
@@ -65,6 +77,17 @@ const EXTRACT = String.raw`(() => {
     for (const l of txt(z).split('\n')) {
       const t = l.trim();
       if (t && lines.length < 600) lines.push(t);
+    }
+  }
+  // Estado de la entrega: SOLO la tabla de estado y los requisitos de finalización,
+  // para que un enunciado que diga «será calificado» no se tome por una nota.
+  const statusLines = [];
+  const statusZones = ['.submissionstatustable', '[data-region="completionrequirements"]', '[data-region="completion-info"]', '.completion-info']
+    .map((s) => Array.from(document.querySelectorAll(s))).flat();
+  for (const z of statusZones) {
+    for (const l of txt(z).split('\n')) {
+      const t = l.trim();
+      if (t && statusLines.length < 200) statusLines.push(t);
     }
   }
 
@@ -119,8 +142,8 @@ const EXTRACT = String.raw`(() => {
 
   return {
     isLogin, platform: isMoodle ? 'moodle' : 'generic', url: location.href,
-    title: title.slice(0, 300), course: course.slice(0, 300), description: description.slice(0, 8000),
-    lines, files
+    title: title.slice(0, 300), course: course.slice(0, 300), section: section.slice(0, 300),
+    description: description.slice(0, 8000), lines, statusLines, files
   };
 })()`
 
@@ -130,12 +153,17 @@ interface RawPage {
   url: string
   title: string
   course: string
+  section: string
   description: string
   lines: string[]
+  statusLines: string[]
   files: ActivityFile[]
 }
 
-const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '')
+const strList = (v: unknown, max: number): string[] =>
+  (Array.isArray(v) ? v : []).filter((l): l is string => typeof l === 'string').slice(0, max)
+
+const str =(v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '')
 
 /** Lo que llega de la página no es de fiar: se comprueba tipo y tamaño de todo. */
 function sanitizeRaw(raw: unknown): RawPage {
@@ -147,8 +175,10 @@ function sanitizeRaw(raw: unknown): RawPage {
     url: str(r.url, 2000),
     title: str(r.title, 300).trim(),
     course: str(r.course, 300).trim(),
+    section: str(r.section, 300).trim(),
     description: str(r.description, 8000).trim(),
-    lines: (Array.isArray(r.lines) ? r.lines : []).filter((l): l is string => typeof l === 'string').slice(0, 600),
+    lines: strList(r.lines, 600),
+    statusLines: strList(r.statusLines, 200),
     files: files
       .map((f) => (f && typeof f === 'object' ? (f as Record<string, unknown>) : {}))
       .map((f) => ({
@@ -270,9 +300,45 @@ export function isGraded(lines: string[]): boolean {
   return false
 }
 
+// Estados de la entrega en castellano, valenciano e inglés (texto ya sin tildes).
+const SUBMITTED_RE =
+  /enviad[oa] para (?:su )?calificar|enviad[oa] para (?:su )?calificacion|trames(?:a)? per (?:a )?qualifica|submitted for grading|\b(?:hecho|fet|done)\s*:\s*(?:hacer|fer|make)\s+(?:un|una|a)\s+(?:envio|tramesa|submission)/
+const DRAFT_RE = /\b(?:borrador|esborrany|draft)\b/
+const NOT_SUBMITTED_RE =
+  /no entregad|sin entrega|no se ha (?:hecho|realizado|enviado|entregado)|ningun (?:intento|envio)|no hay (?:ningun|ninguna) (?:intento|entrega|envio)|no s'ha fet cap|cap intent|no hi ha cap tramesa|no trames|no attempt|no submission|nothing has been submitted|\b(?:para hacer|per fer|to do)\s*:\s*(?:hacer|fer|make)\s+(?:un|una|a)\s+(?:envio|tramesa|submission)/
+
+/** El valor de una fila de estado: «Estado de la entrega<TAB>Enviado para calificar» → «Enviado para calificar». */
+function statusValue(line: string): string {
+  const v = line.includes('\t') ? line.slice(line.lastIndexOf('\t') + 1) : line
+  return v.trim().slice(0, 80) || line.trim().slice(0, 80)
+}
+
+/**
+ * Estado de tu entrega según la plataforma, mirando solo la tabla de estado y los
+ * requisitos de finalización. Si hay varias señales gana la más avanzada:
+ * calificada → «corregida», enviada → «entregada», borrador → «en curso»,
+ * sin entregar → «pendiente».
+ */
+export function detectSubmission(lines: string[]): { status: Status; label: string } | null {
+  const find = (test: (l: string) => boolean): string | null => {
+    const hit = lines.find((line) => test(fold(line).replace(/[’`]/g, "'")))
+    return hit ? statusValue(hit) : null
+  }
+  const graded = find((l) => !NOT_GRADED_RE.test(l) && (GRADED_RE.test(l) || GRADE_DONE_RE.test(l)))
+  if (graded) return { status: 'corregida', label: graded }
+  const submitted = find((l) => SUBMITTED_RE.test(l))
+  if (submitted) return { status: 'entregada', label: submitted }
+  const draft = find((l) => DRAFT_RE.test(l))
+  if (draft) return { status: 'en curso', label: draft }
+  const pending = find((l) => NOT_SUBMITTED_RE.test(l))
+  if (pending) return { status: 'pendiente', label: pending }
+  return null
+}
+
 function buildActivity(p: RawPage): ScrapedActivity {
   const due = findDueDate(p.lines)
-  const graded = isGraded(p.lines)
+  const submission = detectSubmission(p.statusLines)
+  const graded = submission?.status === 'corregida'
   return {
     url: p.url,
     platform: p.platform,
@@ -282,6 +348,8 @@ function buildActivity(p: RawPage): ScrapedActivity {
     due_date: due?.date ?? null,
     due_raw: due?.raw ?? null,
     graded,
+    submission,
+    unit: parseUnit(p.section, p.title),
     // Tu archivo enviado solo se recoge cuando la tarea está calificada.
     files: graded ? p.files : p.files.filter((f) => f.section === 'enunciado')
   }

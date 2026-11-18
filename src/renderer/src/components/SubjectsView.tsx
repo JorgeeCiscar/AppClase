@@ -117,7 +117,7 @@ export default function SubjectsView({ onOpen }: { onOpen: (id: number) => void 
               <button
                 className="tiny danger ghost"
                 onClick={async () => {
-                  if (!window.confirm(`¿Borrar «${s.name}» con sus temas y elementos? Los ficheros seguirán en el disco.`)) return
+                  if (!window.confirm(`¿Borrar «${s.name}» con sus unidades y elementos? Los ficheros seguirán en el disco.`)) return
                   await window.api.subjects.remove(s.id)
                   void load()
                 }}

@@ -44,6 +44,35 @@ export function daysUntil(iso: string | null | undefined): number | null {
   return Math.round((target.getTime() - base.getTime()) / 86400000)
 }
 
+/** Cuánto aprieta una entrega: de «tiempo de sobra» a «fuera de plazo». */
+export type Urgency = 'later' | 'week' | 'soon' | 'today' | 'over' | 'done'
+
+export const URGENCY_ORDER: Urgency[] = ['later', 'week', 'soon', 'today', 'over', 'done']
+export const URGENCY_LABEL: Record<Urgency, string> = {
+  later: 'Más de una semana',
+  week: 'Esta semana',
+  soon: 'En 2 o 3 días',
+  today: 'Hoy o mañana',
+  over: 'Fuera de plazo',
+  done: 'Entregada o corregida'
+}
+
+/**
+ * El color de una entrega va cambiando según se acerca la fecha. Lo ya entregado
+ * o corregido deja de avisar.
+ */
+export function urgencyOf(due: string | null | undefined, status: string | null | undefined): Urgency | null {
+  if (!due) return null
+  if (status === 'entregada' || status === 'corregida') return 'done'
+  const n = daysUntil(due)
+  if (n === null) return null
+  if (n < 0) return 'over'
+  if (n <= 1) return 'today'
+  if (n <= 3) return 'soon'
+  if (n <= 7) return 'week'
+  return 'later'
+}
+
 export function dueLabel(iso: string | null | undefined): string {
   const n = daysUntil(iso)
   if (n === null) return ''

@@ -7,12 +7,10 @@ import ItemRow from './ItemRow'
 
 export default function Dashboard({
   openers,
-  onToast,
-  courseName
+  onToast
 }: {
   openers: Opener[]
   onToast: (msg: string, bad?: boolean) => void
-  courseName: string
 }) {
   const [stats, setStats] = useState<Stats | undefined>()
   const [openItem, setOpenItem] = useState<number | null>(null)
@@ -33,7 +31,6 @@ export default function Dashboard({
     <div className="page">
       <div className="page-header">
         <h1>Panel</h1>
-        <span className="muted">{courseName}</span>
         <ImportButton className="primary" onToast={onToast} onImported={() => void load()} />
       </div>
 

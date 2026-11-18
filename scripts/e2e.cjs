@@ -72,7 +72,7 @@ function check(name, ok, detail = '') {
     await win.click('.subject-card:has-text("Programación") button:has-text("Abrir")')
     await win.waitForSelector('h1:has-text("Programación")')
 
-    await win.click('button:has-text("Nuevo tema")')
+    await win.click('button:has-text("Nueva unidad")')
     await win.waitForSelector('.modal')
     await win.fill('.modal input[name="unit_number"]', '1')
     await win.fill('.modal input[name="unit_title"]', 'Estructuras de control')
@@ -238,6 +238,14 @@ function check(name, ok, detail = '') {
       notes1.replace(/\s+/g, ' ').slice(0, 160)
     )
     check('avisa de que la tarea está calificada', /tarea calificada/.test(await win.locator('.modal .notice').textContent()))
+    const notice = async () => (await win.locator('.modal .notice').textContent()) || ''
+    const unitChosen = async () => (await win.locator('.modal select[name="unit_id"] option:checked').textContent()) || ''
+    const unit7 = await unitChosen()
+    check('lee la unidad («Unitat 1: …») y la coloca en la unidad 1 que ya existía', unit7 === '1. Estructuras de control', unit7)
+    check(
+      'detecta el estado de la entrega: «Qualificat» → corregida',
+      (await value('.modal select[name="status"]')) === 'corregida' && /«Qualificat»/.test(await notice())
+    )
     const namesIn = (section) => win.locator(`.modal [data-section="${section}"] .fname`).allTextContents()
     const enun = await namesIn('enunciado')
     check(
@@ -262,6 +270,14 @@ function check(name, ok, detail = '') {
     await win.waitForSelector('.modal', { state: 'detached', timeout: 30000 })
     const imported = await win.evaluate(async () => (await window.api.items.list({ text: 'Tasca 3' }))[0])
     check('al estar calificada, se guarda como «corregida» (no pendiente)', imported && imported.status === 'corregida' && imported.kind === 'ejercicio', imported && imported.status)
+    const proUnits = () =>
+      win.evaluate(async (sid) => (await window.api.units.list(sid)).map((u) => `${u.number}. ${u.title}`), Number(idOf('Programación')))
+    const units7 = await proUnits()
+    check(
+      'no duplica la unidad: la guarda en la «1. Estructuras de control» que ya había',
+      imported.unit_title === 'Estructuras de control' && units7.length === 1,
+      units7.join(' | ')
+    )
     const files1 = await win.evaluate((id) => window.api.files.list(id), imported.id)
     const bySection = (s) => files1.filter((f) => f.section === s).map((f) => f.name).sort()
     check(
@@ -312,6 +328,13 @@ function check(name, ok, detail = '') {
     const due4 = await value('.modal input[name="due_date"]')
     check('lee «Pendiente:» (Moodle 4 en castellano) como fecha de entrega', due4 === '2026-11-30', due4)
     check(
+      'detecta «Enviado para calificar» → entregada',
+      (await value('.modal select[name="status"]')) === 'entregada' && /«Enviado para calificar»/.test(await notice()),
+      await value('.modal select[name="status"]')
+    )
+    const unit4 = await unitChosen()
+    check('lee «UD 3 - Arrays» y la ofrece como unidad nueva', unit4 === '3. Arrays (nueva)', unit4)
+    check(
       'sin calificar: no hay apartado «Archivo enviado» ni se recoge tu entrega',
       (await win.locator('.modal [data-section="enviado"]').count()) === 0 &&
         !(await win.locator('.modal').textContent()).includes('entrega-arrays.zip')
@@ -322,7 +345,31 @@ function check(name, ok, detail = '') {
     const imported4 = await win.evaluate(async () => (await window.api.items.list({ text: 'Tarea 4' }))[0])
     const files4 = await win.evaluate((id) => window.api.files.list(id), imported4.id)
     check('tarea de solo texto: se guarda sin ficheros', files4.length === 0, files4.map((f) => f.name).join(', '))
-    check('sin calificar: se guarda como entrega pendiente', imported4.status === 'pendiente', imported4.status)
+    check('se guarda como «entregada»', imported4.status === 'entregada', imported4.status)
+    check(
+      'crea la unidad «3. Arrays» en Programación y mete ahí la actividad',
+      imported4.unit_number === 3 && imported4.unit_title === 'Arrays',
+      `${imported4.unit_number}. ${imported4.unit_title}`
+    )
+
+    // Borrador, con la unidad como texto (sin enlace) y un enunciado que dice «será calificado».
+    await win.click('button:has-text("Importar desde enlace")')
+    await win.fill('.modal input[name="activity_url"]', `${base}/mod/assign/view.php?id=9`)
+    await win.click('.modal button:has-text("Leer actividad")')
+    await win.waitForSelector('.modal input[name="title"]', { timeout: 30000 })
+    const st5 = await value('.modal select[name="status"]')
+    check('detecta «Borrador (no enviado)» → en curso', st5 === 'en curso', st5)
+    check('«será calificado» en el enunciado no la marca como calificada', !/tarea calificada/.test(await notice()))
+    const unit5 = await unitChosen()
+    check('lee la unidad aunque en la ruta no sea un enlace («Tema 4. Funciones»)', unit5 === '4. Funciones (nueva)', unit5)
+    await win.click('.modal button:has-text("Guardar")')
+    await win.waitForSelector('.modal', { state: 'detached', timeout: 30000 })
+    const imported5 = await win.evaluate(async () => (await window.api.items.list({ text: 'Tarea 5' }))[0])
+    check(
+      'se guarda en curso y en la unidad «4. Funciones»',
+      imported5.status === 'en curso' && imported5.unit_number === 4 && imported5.unit_title === 'Funciones',
+      `${imported5.status} · ${imported5.unit_number}. ${imported5.unit_title}`
+    )
 
     // Página genérica (no Moodle) en castellano: no pide sesión.
     await win.click('button:has-text("Importar desde enlace")')
@@ -379,6 +426,12 @@ function check(name, ok, detail = '') {
     const count = (t) => win.evaluate(async (text) => (await window.api.items.list({ text })).length, t)
     const [n4, n2] = [await count('Tarea 4'), await count('Práctica 2')]
     check('solo se guarda la que confirmaste, no la saltada', n4 === 2 && n2 === 1, `Tarea 4: ${n4}, Práctica 2: ${n2}`)
+    const unitsAfter = await proUnits()
+    check(
+      'volver a importar una actividad de la unidad 3 no crea otra unidad 3',
+      unitsAfter.filter((u) => u.startsWith('3.')).length === 1,
+      unitsAfter.join(' | ')
+    )
 
     // --- Entregas: por defecto, agrupadas por asignatura ---
     await win.click('.sidebar nav button:has-text("Panel")')
@@ -387,7 +440,8 @@ function check(name, ok, detail = '') {
     const groupsInfo = await win.locator('.subject-group').evaluateAll((els) =>
       els.map((s) => ({
         name: s.getAttribute('data-subject'),
-        rows: Array.from(s.querySelectorAll('.list-row .title')).map((t) => t.textContent)
+        rows: Array.from(s.querySelectorAll('.list-row .title')).map((t) => t.textContent),
+        units: Array.from(s.querySelectorAll('.unit-group-title')).map((t) => t.textContent)
       }))
     )
     check(
@@ -396,23 +450,29 @@ function check(name, ok, detail = '') {
       groupsInfo.map((g) => g.name).join(' | ')
     )
     check(
-      'cada actividad va en su asignatura, ordenada por fecha',
+      'dentro de cada asignatura, agrupa por unidad, en orden de unidad',
+      JSON.stringify(groupsInfo.map((g) => g.units)) ===
+        JSON.stringify([['1. Estructuras de control', '3. Arrays', '4. Funciones'], []]),
+      JSON.stringify(groupsInfo.map((g) => g.units))
+    )
+    check(
+      'cada actividad va en su asignatura y su unidad, ordenada por fecha',
       JSON.stringify(groupsInfo.map((g) => g.rows)) ===
         JSON.stringify([
-          ['Tasca 3: bucles', 'Tarea 4: arrays', 'Tarea 4: arrays', 'Ejercicio 3: bucles'],
+          ['Tasca 3: bucles', 'Ejercicio 3: bucles', 'Tarea 4: arrays', 'Tarea 4: arrays', 'Tarea 5: funciones'],
           ['Práctica 2: formulario accesible']
         ]),
       JSON.stringify(groupsInfo.map((g) => g.rows))
     )
     check(
       'el título de cada grupo dice cuántas entregas tiene',
-      /4 entregas/.test((await win.locator('.subject-group[data-subject="Programación"] .subject-group-title').textContent()) || '')
+      /5 entregas/.test((await win.locator('.subject-group[data-subject="Programación"] .subject-group-title').textContent()) || '')
     )
     await win.screenshot({ path: path.join(S, 'shots', 'entregas-por-asignatura.png') })
     await win.selectOption('select[name="grouping"]', 'fecha')
     check(
       '«Todas por fecha» vuelve a la lista única',
-      (await win.locator('.subject-group').count()) === 0 && (await win.locator('.list-row').count()) === 5
+      (await win.locator('.subject-group').count()) === 0 && (await win.locator('.list-row').count()) === 6
     )
     await win.click('.sidebar nav button:has-text("Panel")')
     await win.click('.sidebar nav button:has-text("Entregas")')
@@ -433,6 +493,72 @@ function check(name, ok, detail = '') {
     const outcome = await pending
     check('cerrar esa ventana cancela la lectura con un mensaje claro', /cancelada/.test(outcome), outcome)
     server.close()
+
+    // --- Colores según se acerca el plazo (en una asignatura sin más entregas) ---
+    const plus = (n) => {
+      const d = new Date(Date.now() + n * 86400000)
+      const p2 = (v) => String(v).padStart(2, '0')
+      return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+    }
+    const urgentCases = [
+      ['U-tiempo de sobra', 10, 'pendiente', 'later'],
+      ['U-esta semana', 5, 'pendiente', 'week'],
+      ['U-en dos días', 2, 'en curso', 'soon'],
+      ['U-hoy', 0, 'pendiente', 'today'],
+      ['U-ayer', -1, 'pendiente', 'over'],
+      ['U-ya entregada', 1, 'entregada', 'done']
+    ]
+    await win.evaluate(
+      async ([cases, dates]) => {
+        const subs = await window.api.subjects.list()
+        const ed = subs.find((x) => x.name === 'Entornos de desarrollo').id
+        for (const [title, , status] of cases) {
+          await window.api.items.save({ subject_id: ed, kind: 'ejercicio', title, status, due_date: dates[title] })
+        }
+      },
+      [urgentCases, Object.fromEntries(urgentCases.map(([t, n]) => [t, plus(n)]))]
+    )
+    await win.click('.sidebar nav button:has-text("Panel")')
+    await win.click('.sidebar nav button:has-text("Entregas")')
+    await win.waitForSelector('.subject-group[data-subject="Entornos de desarrollo"]')
+    const urg = await win
+      .locator('.subject-group[data-subject="Entornos de desarrollo"] .list-row')
+      .evaluateAll((rows) =>
+        rows.map((r) => ({
+          title: r.querySelector('.title').textContent,
+          u: r.getAttribute('data-urgency'),
+          border: getComputedStyle(r).borderLeftColor
+        }))
+      )
+    const wrong = urgentCases.filter(([t, , , u]) => (urg.find((r) => r.title === t) || {}).u !== u)
+    check(
+      'cada entrega toma el color de lo que falta para su plazo',
+      wrong.length === 0,
+      wrong.length ? `fallan: ${wrong.map((w) => w[0]).join(', ')}` : urg.map((r) => `${r.title}=${r.u}`).join(', ')
+    )
+    const colorOf = (t) => (urg.find((r) => r.title === t) || {}).border
+    check(
+      'los colores son distintos según se acerca el plazo',
+      new Set(['U-tiempo de sobra', 'U-esta semana', 'U-en dos días', 'U-hoy', 'U-ayer'].map(colorOf)).size === 5
+    )
+    check('la leyenda explica los colores', (await win.locator('.urg-legend span').count()) === 6)
+    await win.screenshot({ path: path.join(S, 'shots', 'colores-plazo.png') })
+
+    // --- Disposición: menú en pestañas arriba y Panel en tablero ---
+    const bar = await win.locator('.sidebar').boundingBox()
+    const viewport = await win.evaluate(() => ({ w: window.innerWidth }))
+    check('el menú es una barra arriba, a lo ancho', bar.y === 0 && bar.width >= viewport.w - 2 && bar.height < 80, JSON.stringify(bar))
+    check('las pestañas llevan icono', (await win.locator('.sidebar nav button svg.nav-icon:visible').count()) === 5)
+    await win.click('.sidebar nav button:has-text("Panel")')
+    await win.waitForSelector('.dash-recent')
+    const soonBox = await win.locator('.dash-soon').boundingBox()
+    const recentBox = await win.locator('.dash-recent').boundingBox()
+    check(
+      'Panel en tablero: los últimos ficheros van en una columna a la derecha',
+      recentBox.x > soonBox.x + soonBox.width - 1,
+      `próximas x=${Math.round(soonBox.x)} · recientes x=${Math.round(recentBox.x)}`
+    )
+    await win.screenshot({ path: path.join(S, 'shots', 'panel-tablero.png') })
 
     check('sin errores de JavaScript en la interfaz', errors.length === 0, errors.join(' | '))
     await app.close()

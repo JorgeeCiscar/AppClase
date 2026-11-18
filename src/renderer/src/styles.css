@@ -49,25 +49,31 @@ label.field > input, label.field > select, label.field > textarea { color: var(-
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 label.field > input, label.field > select, label.field > textarea { min-width: 0; width: 100%; }
 
-.app { display: flex; height: 100%; }
-.sidebar { width: 210px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; }
-.brand { font-weight: 700; font-size: 17px; padding: 0 8px 4px; }
+/* Disposición: menú en pestañas arriba (la clase sigue siendo .sidebar). */
+.app { display: flex; flex-direction: column; height: 100%; }
+.sidebar { flex-shrink: 0; background: var(--panel); border-bottom: 1px solid var(--border); padding: 10px 22px;
+  display: flex; flex-direction: row; align-items: center; gap: 16px; }
+.brand { font-weight: 700; font-size: 17px; white-space: nowrap; }
 .brand-mark { color: var(--accent); }
-.brand-sub { padding: 0 8px 20px; font-size: 12px; color: var(--muted); }
-.sidebar nav { display: flex; flex-direction: column; gap: 2px; }
-.sidebar nav button { text-align: left; background: transparent; border: none; padding: 9px 10px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.brand-sub { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.sidebar nav { display: flex; flex-direction: row; gap: 4px; margin-left: 20px; }
+.sidebar nav button { background: transparent; border: none; padding: 8px 14px; border-radius: 8px; color: var(--muted);
+  display: flex; gap: 8px; align-items: center; }
+.sidebar nav button:hover:not(.active) { background: var(--panel-2); color: var(--text); }
 .sidebar nav button.active { background: var(--panel-2); color: var(--text); }
-.sidebar nav button .count { margin-left: auto; font-size: 11px; color: var(--muted); }
-/* Los iconos del menú están listos para las disposiciones que los usen; en la actual no se ven. */
-.nav-icon { display: none; flex-shrink: 0; }
-.sidebar-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
-.app-version { padding: 0 8px; }
-.update-banner { padding: 10px; border-radius: 8px; background: var(--panel-2); display: flex; flex-direction: column; gap: 6px; }
+.sidebar nav button .count { display: none; }
+.nav-icon { display: inline-block; flex-shrink: 0; width: 16px; height: 16px; }
+.sidebar-bottom { margin-left: auto; display: flex; flex-direction: row; align-items: center; gap: 12px; }
+.app-version { white-space: nowrap; }
+.update-banner { padding: 5px 6px 5px 12px; border-radius: 8px; background: var(--panel-2); display: flex; flex-direction: row;
+  align-items: center; gap: 10px; font-size: 12px; white-space: nowrap; }
 .update-banner.ready { border: 1px solid var(--accent); }
-.update-banner button { width: 100%; }
+.update-banner .small { display: none; }
+.update-banner button { padding: 4px 10px; font-size: 12px; }
+@media (max-width: 1100px) { .brand-sub { display: none; } .sidebar nav { margin-left: 4px; } }
 .update-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; max-width: 620px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
-.content { flex: 1; overflow: auto; min-width: 0; }
+.content { flex: 1; overflow: auto; min-width: 0; min-height: 0; }
 
 .page { padding: 22px 26px 60px; }
 .page-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -76,6 +82,13 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
 .error { background: #3a1f1f; border: 1px solid var(--bad); color: #ffd9d7; padding: 9px 12px; border-radius: 6px; margin: 12px 0; }
 .notice { background: #1f2d3a; border: 1px solid #35566e; padding: 9px 12px; border-radius: 6px; margin: 12px 0; }
 
+.dash { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 26px; align-items: start;
+  grid-template-areas: "stats stats" "overdue recent" "soon recent";
+  /* La última fila absorbe la altura de la columna derecha: así no queda hueco bajo «Fuera de plazo». */
+  grid-template-rows: auto auto 1fr; }
+.dash-stats { grid-area: stats; } .dash-overdue { grid-area: overdue; } .dash-soon { grid-area: soon; } .dash-recent { grid-area: recent; }
+.dash-recent .file-row button.ghost { display: none; }
+@media (max-width: 1000px) { .dash { display: block; } }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
 .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; color: var(--muted); font-size: 12px; }
 .stat span { display: block; font-size: 26px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
@@ -104,6 +117,23 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
 .status-entregada { background: #2f855a; }
 .status-corregida { background: #6c5b9e; }
 .due-soon { color: var(--warn); }
+/* Urgencia de una entrega: el borde y la fecha cambian de color según se acerca el plazo. */
+.urg-later { --urg: #4cb782; }
+.urg-week { --urg: #d9c441; }
+.urg-soon { --urg: #f0922e; }
+.urg-today { --urg: #f2552c; }
+.urg-over { --urg: #e0405a; }
+.urg-done { --urg: #6b7080; }
+.list-row.urg { border-left: 4px solid var(--urg); }
+.list-row.urg-today { background: color-mix(in srgb, var(--urg) 9%, var(--panel)); }
+.list-row.urg-over { background: color-mix(in srgb, var(--urg) 11%, var(--panel)); }
+.list-row .due { color: var(--muted); white-space: nowrap; }
+.list-row.urg .due { color: var(--urg); }
+.list-row.urg-today .due, .list-row.urg-over .due { font-weight: 700; }
+.list-row.urg-done .due { color: var(--muted); }
+.urg-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.urg-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.urg-legend span::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--urg); }
 .due-over { color: var(--bad); font-weight: 600; }
 .chip-missing { background: #3a1f1f; border: 1px solid var(--bad); color: #ffd9d7; font-size: 11px; padding: 1px 7px; border-radius: 99px; }
 
@@ -114,6 +144,8 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
   border-left: 4px solid var(--accent); text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 600; color: var(--text); }
 .subject-group-title .count { font-size: 12px; font-weight: 400; color: var(--muted); }
 .subject-group .list { margin-top: 10px; }
+.unit-group { margin-left: 14px; }
+.unit-group-title { font-size: 12px; font-weight: 600; color: var(--muted); margin: 14px 0 -2px; }
 .url-num { width: 20px; text-align: right; flex-shrink: 0; }
 .file-group-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
 .file-row { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }

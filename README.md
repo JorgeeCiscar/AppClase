@@ -17,7 +17,7 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
 
 - **Asignaturas** con color, abreviatura y profesor. Al crear la base de datos se siembran
   los seis módulos de 1º de DAW; son editables y se pueden borrar o añadir otros.
-- **Temas** numerados dentro de cada asignatura.
+- **Unidades** numeradas dentro de cada asignatura.
 - **Elementos** de cinco tipos: apunte, enunciado, ejercicio, examen y enlace. Con notas,
   enlace a Aules/Moodle/Classroom, etiquetas y, si son entregables, **fecha límite,
   estado** (pendiente → en curso → entregada → corregida) **y nota**.
@@ -31,9 +31,14 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
   etiquetas ni notas.
 - **Panel** con lo que está fuera de plazo, lo que vence en dos semanas y los últimos
   ficheros añadidos.
-- **Entregas**: todo lo que tiene fecha límite, **agrupado por asignatura** (en el orden de la
-  pestaña Asignaturas, con cuántas hay y cuántas están fuera de plazo) o, si lo prefieres, todo
-  junto por fecha; la app recuerda la opción. Filtrable por estado y por fuera de plazo.
+- **Entregas**: todo lo que tiene fecha límite, **agrupado por asignatura y, dentro, por unidad**
+  (en el orden de la pestaña Asignaturas, con cuántas hay y cuántas están fuera de plazo) o, si lo
+  prefieres, todo junto por fecha; la app recuerda la opción. Filtrable por estado y por fuera de plazo.
+- **Colores según el plazo**: cada entrega cambia de color según se acerca su fecha: verde (más de
+  una semana), amarillo (esta semana), naranja (2 o 3 días), rojo anaranjado (hoy o mañana) y rojo
+  (fuera de plazo). Lo entregado o corregido queda en gris. La leyenda está en Entregas.
+- **Disposición**: menú en pestañas arriba, con iconos; el Panel es un tablero con los contadores
+  arriba, lo urgente a la izquierda y los últimos ficheros a la derecha.
 - **Búsqueda global** (`Ctrl+K`) de asignaturas, elementos, nombres de fichero y etiquetas,
   y opcionalmente **dentro del contenido** de los ficheros de texto indexados
   (`.java`, `.sql`, `.html`, `.md`, `.txt`…), con el número de línea y la línea encontrada.
@@ -61,10 +66,15 @@ Botón **«Importar desde enlace…»** en el Panel, en cada asignatura y en Ent
   notas (sin las fechas ni los requisitos de finalización) y sus **ficheros** (adjuntos e imágenes
   del enunciado) se adjuntan en el apartado **«Enunciado del profesor»**. Lo que está fuera de la
   cabecera se ignora. El curso sale de la ruta de navegación.
+- Se detecta el **estado de tu entrega** (de la tabla de estado y los requisitos de finalización,
+  nunca del enunciado): sin entregar → pendiente, borrador → en curso, enviada para calificar →
+  entregada, calificada → corregida. En castellano, valenciano e inglés.
+- Se lee la **unidad** de la actividad de la ruta de navegación («UD 3 - Arrays», «Unitat 1: …»,
+  «Tema 4. Funciones») y se guarda en esa unidad de la asignatura: si ya existe (mismo número o mismo
+  nombre) se reutiliza y, si no, se crea. En el formulario se ve como «(nueva)» antes de guardar.
 - Si la tarea aparece como **calificada** («Calificado», «Qualificat», «Graded», «Hecho: Recibir
   una calificación»…), se añade el apartado **«Archivo enviado»** con tu entrega, aparte del
-  enunciado (en disco, en la subcarpeta `Archivo enviado`), y se guarda con estado «corregida».
-  Sin calificar, tu entrega no se recoge.
+  enunciado (en disco, en la subcarpeta `Archivo enviado`). Sin calificar, tu entrega no se recoge.
 - En otras webs (sin esa cabecera) se leen el título, los enlaces a documentos y la fecha que siga
   a «Fecha de entrega», «Fecha límite», «Venciment», «Due»…
 - Fechas en castellano, valenciano e inglés, y en formato `dd/mm/aaaa`.

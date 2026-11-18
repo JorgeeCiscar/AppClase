@@ -207,9 +207,18 @@ export function revalidate(db: DB, itemId?: number): number {
   return reconcile(db, rows)
 }
 
-/** Comprueba solo los ficheros que están en estas carpetas (lo usa el vigilante). */
+/**
+ * Comprueba los ficheros que están en estas carpetas o en sus subcarpetas (lo usa el
+ * vigilante). Las subcarpetas cuentan porque, en Windows, cuando se borra una carpeta
+ * entera solo avisa la carpeta de arriba, no la borrada.
+ */
 export function revalidateDirs(db: DB, dirs: Set<string>): number {
-  const rows = (db.prepare(FILE_STATE).all() as FileState[]).filter((f) => dirs.has(dirname(f.path)))
+  const within = (p: string): boolean => {
+    const dir = dirname(p)
+    for (const d of dirs) if (dir === d || isInside(d, dir)) return true
+    return false
+  }
+  const rows = (db.prepare(FILE_STATE).all() as FileState[]).filter((f) => within(f.path))
   return reconcile(db, rows)
 }
 

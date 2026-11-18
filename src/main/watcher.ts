@@ -47,7 +47,9 @@ export function syncWatchers(): void {
   if (!db) return
   const dirs = new Set((db.prepare('SELECT DISTINCT path FROM files').all() as { path: string }[]).map((r) => dirname(r.path)))
   for (const [dir, w] of watchers) {
-    if (!dirs.has(dir)) {
+    // También se deja de vigilar una carpeta que ya no existe: en Windows, mantenerla
+    // vigilada deja la carpeta borrada «a medias» hasta que se cierra la app.
+    if (!dirs.has(dir) || !existsSync(dir)) {
       w.close()
       watchers.delete(dir)
     }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Item, Status, Subject } from '../../../shared/types'
+import type { Item, Status, Subject, Unit } from '../../../shared/types'
 import { STATUSES } from '../../../shared/types'
 import { errorMessage } from '../util'
 import Modal from './Modal'
@@ -13,12 +13,15 @@ type Dialog = null | 'tag' | 'grade' | 'delete'
 export default function BulkBar({
   selected,
   subjects,
+  units,
   onDone,
   onCancel,
   onToast
 }: {
   selected: Item[]
   subjects: Subject[]
+  /** Dentro de una asignatura: sus unidades, para «Cambiar de unidad». */
+  units?: Unit[]
   /** Tras aplicar una acción; removedIds son las entregas que ya no existen. */
   onDone: (removedIds?: number[]) => void
   onCancel: () => void
@@ -101,7 +104,7 @@ export default function BulkBar({
           }}
         >
           <option value="" disabled>
-            Cambiar de asignatura…
+            Otra asignatura…
           </option>
           {subjects.map((s) => (
             <option key={s.id} value={s.id}>
@@ -109,6 +112,33 @@ export default function BulkBar({
             </option>
           ))}
         </select>
+        {units && (
+          <select
+            name="bulk_unit"
+            value=""
+            disabled={!n || busy}
+            onChange={(e) => {
+              const v = e.target.value
+              const unit = v === '__none' ? null : units.find((u) => u.id === Number(v))
+              if (unit === undefined) return
+              void run(async () => {
+                await window.api.items.bulkUpdate(ids, { unit_id: unit ? unit.id : null })
+                return unit ? `${plural(n, 'elemento movido', 'elementos movidos')} a «${unit.title}»` : 'Sin unidad'
+              })
+            }}
+          >
+            <option value="" disabled>
+              Otra unidad…
+            </option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.number !== null ? `${u.number}. ` : ''}
+                {u.title}
+              </option>
+            ))}
+            <option value="__none">— sin unidad —</option>
+          </select>
+        )}
         <button disabled={!n || busy} onClick={() => setDialog('tag')}>
           Añadir etiqueta
         </button>

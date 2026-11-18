@@ -883,6 +883,57 @@ function check(name, ok, detail = '') {
       (await win.locator('.modal .course-act.exists').count()) === 9 && (await win.locator('.modal button.primary').isDisabled())
     )
     await win.click('.modal button:has-text("Cancelar")')
+
+    // --- Seleccionar apuntes dentro de una asignatura ---
+    const proSid = Number(idOf('Programación'))
+    const apuntesPro = () => win.evaluate((sid) => window.api.items.list({ subject_id: sid, kind: 'apunte' }), proSid)
+    await win.click('.sidebar nav button:has-text("Asignaturas")')
+    await win.click('.subject-card:has-text("Programación") button:has-text("Abrir")')
+    await win.waitForSelector('h1:has-text("Programación")')
+    await win.selectOption('select[name="kind_filter"]', 'apunte')
+    await waitFor(async () => (await win.locator('.list-row').count()) === 4)
+    check('en la asignatura, el filtro deja solo sus 4 apuntes', (await win.locator('.list-row').count()) === 4)
+    await win.click('.page button:text-is("Seleccionar")')
+    await win.waitForSelector('.bulk-bar')
+    await win.click('button:has-text("Seleccionar todos")')
+    check('«Seleccionar todos» marca los apuntes filtrados', /4 seleccionadas/.test(await barText()), await barText())
+    check('los apuntes muestran su casilla marcada', (await win.locator('.list-row.is-checked').count()) === 4)
+    await win.screenshot({ path: path.join(S, 'shots', 'asignatura-seleccion.png') })
+
+    const arraysUnit = (await win.evaluate((sid) => window.api.units.list(sid), proSid)).find((u) => u.title === 'Arrays')
+    await win.selectOption('select[name="bulk_unit"]', String(arraysUnit.id))
+    await waitFor(async () => (await apuntesPro()).every((i) => i.unit_title === 'Arrays'))
+    const moved = await apuntesPro()
+    check(
+      '«Cambiar de unidad» mueve los apuntes seleccionados',
+      moved.length === 4 && moved.every((i) => i.unit_title === 'Arrays'),
+      moved.map((i) => `${i.title}→${i.unit_title}`).join(', ')
+    )
+
+    await win.click('.bulk-bar button:has-text("Añadir etiqueta")')
+    await win.fill('.modal input[name="bulk_tag"]', 'teoría')
+    await win.click('.modal button:has-text("Añadir")')
+    await win.waitForSelector('.modal', { state: 'detached' })
+    check('y se les pone una etiqueta a todos a la vez', (await apuntesPro()).every((i) => i.tags.includes('teoría')))
+
+    await win.click('button:has-text("Quitar selección")')
+    check('«Quitar selección» los desmarca', /Ninguna seleccionada/.test(await barText()))
+    await win.check('.unit-section h2 .group-check')
+    check('la casilla de una unidad marca todos los suyos', /4 seleccionadas/.test(await barText()), await barText())
+
+    // Protección: nada puede ir a una unidad de otra asignatura.
+    const bdUnit = await win.evaluate(
+      (sid) => window.api.units.save({ subject_id: sid, number: 1, title: 'Modelo relacional' }),
+      Number(idOf('Bases de datos'))
+    )
+    const refused = await win.evaluate(
+      ([ids, uid]) => window.api.items.bulkUpdate(ids, { unit_id: uid }).then(() => 'aceptado', (e) => e.message),
+      [moved.map((i) => i.id), bdUnit.id]
+    )
+    check('no deja meter un elemento en una unidad de otra asignatura', /otra asignatura/.test(refused), refused)
+    check('y no cambia ninguno (todo o nada)', (await apuntesPro()).every((i) => i.unit_title === 'Arrays'))
+    await win.keyboard.press('Escape')
+    check('Escape sale del modo selección también aquí', (await win.locator('.bulk-bar').count()) === 0)
     server.close()
 
     check('sin errores de JavaScript en la interfaz', errors.length === 0, errors.join(' | '))

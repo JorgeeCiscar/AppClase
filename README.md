@@ -18,6 +18,10 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
 - **Asignaturas** con color, abreviatura y profesor. Al crear la base de datos se siembran
   los seis módulos de 1º de DAW; son editables y se pueden borrar o añadir otros.
 - **Unidades** numeradas dentro de cada asignatura.
+- **Seleccionar dentro de una asignatura** (apuntes, ejercicios, enlaces…): «Seleccionar», o la
+  casilla de una unidad para marcar todos los suyos; combinado con el filtro de tipo sirve, por
+  ejemplo, para elegir todos los apuntes. Mismas acciones que en Entregas y, además, **mover a otra
+  unidad** de la asignatura (nunca a una unidad de otra asignatura).
 - **Elementos** de cinco tipos: apunte, enunciado, ejercicio, examen y enlace. Con notas,
   enlace a Aules/Moodle/Classroom, etiquetas y, si son entregables, **fecha límite,
   estado** (pendiente → en curso → entregada → corregida) **y nota**.

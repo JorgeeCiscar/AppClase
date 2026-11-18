@@ -215,7 +215,7 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
   box-shadow: 0 -8px 24px rgba(0, 0, 0, .35); }
 .bulk-bar .bulk-count { margin-right: 6px; white-space: nowrap; }
 /* Los nombres largos de asignatura no deben ensanchar los desplegables y partir la barra. */
-.bulk-bar select { width: 190px; min-width: 0; }
+.bulk-bar select { width: 165px; min-width: 0; }
 .bulk-list { margin: 0; padding-left: 18px; max-height: 180px; overflow: auto; }
 
 /* ---------- Importar una asignatura entera ---------- */
@@ -234,3 +234,9 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
 .course-act.result-hecha .result-label { color: var(--ok); }
 .course-act.result-importando .result-label { color: var(--accent); }
 .course-act.result-error .result-label, .course-act.result-aviso .result-label { color: var(--bad); white-space: normal; }
+
+/* Filas seleccionables fuera de las tarjetas (vista de una asignatura): casilla a la izquierda. */
+.list-row.selectable { position: relative; padding-left: 38px; }
+.list-row.selectable .card-check { top: 50%; transform: translateY(-50%); }
+.deliv-groups .list-row.selectable .card-check { top: 14px; transform: none; }
+.unit-section h2 .group-check { width: 16px; height: 16px; margin: 0; }

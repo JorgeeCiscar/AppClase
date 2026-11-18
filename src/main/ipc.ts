@@ -185,6 +185,8 @@ export interface BulkPatch {
   addTag?: string
   /** Solo con una entrega seleccionada. */
   grade?: number | null
+  /** Unidad de la misma asignatura que cada elemento, o null para dejarlos sin unidad. */
+  unit_id?: number | null
 }
 
 const MAX_BULK = 1000
@@ -230,6 +232,23 @@ export function bulkUpdate(db: DB, rawIds: unknown, patch: BulkPatch): number {
         if (!row || row.subject_id === target) continue
         const unit = row.title !== null ? findUnit(units, { number: row.number, title: row.title }) : undefined
         changed += Number(upd.run(target, unit ? unit.id : null, id).changes)
+      }
+    }
+    if ('unit_id' in p) {
+      const unitId = p.unit_id === null || p.unit_id === undefined ? null : Number(p.unit_id)
+      const unit =
+        unitId === null
+          ? null
+          : (db.prepare('SELECT id, subject_id FROM units WHERE id = ?').get(unitId) as { id: number; subject_id: number } | undefined)
+      if (unitId !== null && !unit) throw new Error('La unidad no existe')
+      const item = db.prepare('SELECT title, subject_id FROM items WHERE id = ?')
+      const upd = db.prepare('UPDATE items SET unit_id = ? WHERE id = ?')
+      for (const id of ids) {
+        const row = item.get(id) as { title: string; subject_id: number } | undefined
+        if (!row) continue
+        // Una unidad es de una asignatura: no se puede meter ahí algo de otra.
+        if (unit && unit.subject_id !== row.subject_id) throw new Error(`«${row.title}» es de otra asignatura: esa unidad no le corresponde`)
+        changed += Number(upd.run(unitId, id).changes)
       }
     }
     if (p.addTag !== undefined) {

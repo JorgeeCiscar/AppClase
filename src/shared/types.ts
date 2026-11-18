@@ -252,7 +252,7 @@ export interface Api {
     /** Cambia varias entregas a la vez (todo o nada). Devuelve cuántos cambios hubo. */
     bulkUpdate: (
       ids: number[],
-      patch: { status?: Status | null; subject_id?: number; addTag?: string; grade?: number | null }
+      patch: { status?: Status | null; subject_id?: number; addTag?: string; grade?: number | null; unit_id?: number | null }
     ) => Promise<number>
     bulkRemove: (
       ids: number[],

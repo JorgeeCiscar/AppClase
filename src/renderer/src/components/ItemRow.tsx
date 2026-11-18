@@ -17,19 +17,22 @@ export default function ItemRow({
     ? new Date(item.due_date) < new Date(new Date().toDateString())
     : false
   const soon = !overdue && item.due_date
+  // Asignatura, tema y ficheros, unidos con « · » solo entre los que haya.
+  const sub = [
+    showSubject ? item.subject_name : null,
+    item.unit_title ? `${item.unit_number !== null ? item.unit_number + '. ' : ''}${item.unit_title}` : null,
+    item.file_count > 0 ? `${item.file_count} fichero${item.file_count === 1 ? '' : 's'}` : null,
+    item.missing_count > 0 ? `${item.missing_count} sin encontrar` : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div className="list-row clickable" onClick={() => onOpen(item)}>
       <span className="badge kind">{KIND_LABEL[item.kind] ?? item.kind}</span>
       <div className="col">
         <div className="title">{item.title}</div>
-        <div className="sub">
-          {showSubject ? item.subject_name : null}
-          {showSubject && item.unit_title ? ' · ' : null}
-          {item.unit_title ? `${item.unit_number !== null ? item.unit_number + '. ' : ''}${item.unit_title}` : null}
-          {item.file_count > 0 ? ` · ${item.file_count} fichero${item.file_count === 1 ? '' : 's'}` : ''}
-          {item.missing_count > 0 ? ` · ${item.missing_count} sin encontrar` : ''}
-        </div>
+        {sub && <div className="sub">{sub}</div>}
       </div>
       {item.tags.slice(0, 3).map((t) => (
         <span className="badge tag" key={t}>

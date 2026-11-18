@@ -31,7 +31,9 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
   etiquetas ni notas.
 - **Panel** con lo que está fuera de plazo, lo que vence en dos semanas y los últimos
   ficheros añadidos.
-- **Entregas**: todo lo que tiene fecha límite, filtrable por estado y por fuera de plazo.
+- **Entregas**: todo lo que tiene fecha límite, **agrupado por asignatura** (en el orden de la
+  pestaña Asignaturas, con cuántas hay y cuántas están fuera de plazo) o, si lo prefieres, todo
+  junto por fecha; la app recuerda la opción. Filtrable por estado y por fuera de plazo.
 - **Búsqueda global** (`Ctrl+K`) de asignaturas, elementos, nombres de fichero y etiquetas,
   y opcionalmente **dentro del contenido** de los ficheros de texto indexados
   (`.java`, `.sql`, `.html`, `.md`, `.txt`…), con el número de línea y la línea encontrada.

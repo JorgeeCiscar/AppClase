@@ -380,6 +380,45 @@ function check(name, ok, detail = '') {
     const [n4, n2] = [await count('Tarea 4'), await count('Práctica 2')]
     check('solo se guarda la que confirmaste, no la saltada', n4 === 2 && n2 === 1, `Tarea 4: ${n4}, Práctica 2: ${n2}`)
 
+    // --- Entregas: por defecto, agrupadas por asignatura ---
+    await win.click('.sidebar nav button:has-text("Panel")')
+    await win.click('.sidebar nav button:has-text("Entregas")')
+    await win.waitForSelector('.subject-group')
+    const groupsInfo = await win.locator('.subject-group').evaluateAll((els) =>
+      els.map((s) => ({
+        name: s.getAttribute('data-subject'),
+        rows: Array.from(s.querySelectorAll('.list-row .title')).map((t) => t.textContent)
+      }))
+    )
+    check(
+      'por defecto, Entregas agrupa por asignatura, en el orden de Asignaturas',
+      groupsInfo.map((g) => g.name).join(' | ') === 'Programación | Lenguajes de marcas y sistemas de gestión de información',
+      groupsInfo.map((g) => g.name).join(' | ')
+    )
+    check(
+      'cada actividad va en su asignatura, ordenada por fecha',
+      JSON.stringify(groupsInfo.map((g) => g.rows)) ===
+        JSON.stringify([
+          ['Tasca 3: bucles', 'Tarea 4: arrays', 'Tarea 4: arrays', 'Ejercicio 3: bucles'],
+          ['Práctica 2: formulario accesible']
+        ]),
+      JSON.stringify(groupsInfo.map((g) => g.rows))
+    )
+    check(
+      'el título de cada grupo dice cuántas entregas tiene',
+      /4 entregas/.test((await win.locator('.subject-group[data-subject="Programación"] .subject-group-title').textContent()) || '')
+    )
+    await win.screenshot({ path: path.join(S, 'shots', 'entregas-por-asignatura.png') })
+    await win.selectOption('select[name="grouping"]', 'fecha')
+    check(
+      '«Todas por fecha» vuelve a la lista única',
+      (await win.locator('.subject-group').count()) === 0 && (await win.locator('.list-row').count()) === 5
+    )
+    await win.click('.sidebar nav button:has-text("Panel")')
+    await win.click('.sidebar nav button:has-text("Entregas")')
+    check('recuerda la forma de agrupar elegida', (await win.locator('select[name="grouping"]').inputValue()) === 'fecha')
+    await win.selectOption('select[name="grouping"]', 'asignatura')
+
     // Cerrar sesión y cancelar: la siguiente lectura vuelve a pedir el login, y cerrar la ventana cancela.
     await win.evaluate(() => window.api.importer.logout())
     const relogP = app.waitForEvent('window')

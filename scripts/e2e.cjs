@@ -54,7 +54,7 @@ function check(name, ok, detail = '') {
     const app = await _electron.launch({
       executablePath: require('electron'),
       args: [ROOT, '--no-sandbox'],
-      env: { ...process.env, APPCLASE_DATA_DIR: path.join(S, 'data') }
+      env: { ...process.env, APPCLASE_DATA_DIR: path.join(S, 'data'), APPCLASE_DEBUG_WATCH: '1' }
     })
     const errors = []
     const mainLog = []
@@ -167,7 +167,14 @@ function check(name, ok, detail = '') {
 
     n0 = await win.evaluate(() => window.__cambios)
     fs.rmSync(usbDir, { recursive: true, force: true })
-    check('si desaparece la carpeta entera, también avisa', await waitChange(n0))
+    const usbAviso = await waitChange(n0)
+    if (!usbAviso) {
+      // Diagnóstico para Windows: qué ve el sistema y qué tiene la app.
+      console.log('  diagnóstico: existe la carpeta para la prueba =', fs.existsSync(usbDir))
+      console.log('  diagnóstico: contenido de curso =', fs.readdirSync(path.join(S, 'curso')).join(', '))
+      console.log('  diagnóstico: ficheros en la app =', JSON.stringify((await filesNow()).map((f) => [f.name, f.missing])))
+    }
+    check('si desaparece la carpeta entera, también avisa', usbAviso)
     await win.waitForSelector('.modal .file-row.missing:has-text("notas-usb.txt")', { timeout: 5000 })
     check(
       'pero no lo quita: queda «no se encuentra» para volver a localizarlo (USB sin conectar)',

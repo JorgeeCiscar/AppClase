@@ -23,6 +23,11 @@ const SWEEP_MS = 60 * 1000
  */
 const EXISTS_MS = 2000
 
+/** Con APPCLASE_DEBUG_WATCH=1 (lo usa la prueba E2E) se registra lo que ve el vigilante. */
+const debug = (...args: unknown[]): void => {
+  if (process.env.APPCLASE_DEBUG_WATCH) console.log('[vigilante]', ...args)
+}
+
 const watchers = new Map<string, FSWatcher>()
 const dirty = new Set<string>()
 let timer: NodeJS.Timeout | null = null
@@ -40,12 +45,14 @@ function flush(): void {
   const dirs = new Set(dirty)
   dirty.clear()
   const changed = revalidateDirs(db, dirs)
+  debug('revisadas', [...dirs], '→ cambios:', changed)
   if (changed > 0) notify()
   // Un renombrado o un borrado puede dejar carpetas sin ficheros que vigilar.
   syncWatchers()
 }
 
-function onChange(dir: string): void {
+function onChange(dir: string, why = 'evento'): void {
+  debug(why, dir)
   dirty.add(dir)
   if (timer) clearTimeout(timer)
   timer = setTimeout(flush, DEBOUNCE_MS)
@@ -59,6 +66,7 @@ export function syncWatchers(): void {
     // También se deja de vigilar una carpeta que ya no existe: en Windows, mantenerla
     // vigilada deja la carpeta borrada «a medias» hasta que se cierra la app.
     if (!dirs.has(dir) || !existsSync(dir)) {
+      debug('deja de vigilar', dir)
       w.close()
       watchers.delete(dir)
     }
@@ -66,16 +74,19 @@ export function syncWatchers(): void {
   for (const dir of dirs) {
     if (watchers.has(dir) || watchers.size >= MAX_WATCHED_DIRS || !existsSync(dir)) continue
     try {
-      const w = watch(dir, { persistent: false }, () => onChange(dir))
-      w.on('error', () => {
+      const w = watch(dir, { persistent: false }, (type, name) => onChange(dir, `evento ${type} ${name}`))
+      debug('vigilando', dir)
+      w.on('error', (err) => {
+        debug('error', dir, String(err))
         // La carpeta desapareció o dejó de estar accesible: se revisa y se deja de vigilar.
         w.close()
         watchers.delete(dir)
         onChange(dir)
       })
       watchers.set(dir, w)
-    } catch {
-      /* sin permiso o no se puede vigilar: queda el repaso periódico */
+    } catch (err) {
+      // Sin permiso o no se puede vigilar: queda el repaso periódico.
+      debug('no se puede vigilar', dir, String(err))
     }
   }
 }
@@ -89,7 +100,7 @@ export function startWatching(database: DB): void {
     syncWatchers()
   }, SWEEP_MS)
   existence = setInterval(() => {
-    for (const dir of watchers.keys()) if (!existsSync(dir)) onChange(dir)
+    for (const dir of watchers.keys()) if (!existsSync(dir)) onChange(dir, 'ya no existe')
   }, EXISTS_MS)
 }
 

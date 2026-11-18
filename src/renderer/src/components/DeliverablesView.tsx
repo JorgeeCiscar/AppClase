@@ -86,7 +86,13 @@ function groupByUnit(items: Item[]): UnitGroup[] {
   })
 }
 
-export default function DeliverablesView({ openers, onToast }: { openers: Opener[]; onToast: (m: string, bad?: boolean) => void }) {
+export default function DeliverablesView({
+  openers,
+  onToast
+}: {
+  openers: Opener[]
+  onToast: (m: string, bad?: boolean) => void
+}) {
   const [items, setItems] = useState<Item[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [status, setStatus] = useState<Status | ''>('')
@@ -157,36 +163,40 @@ export default function DeliverablesView({ openers, onToast }: { openers: Opener
       {items.length === 0 ? (
         <p className="empty">Nada con fecha límite que cumpla el filtro.</p>
       ) : grouping === 'fecha' ? (
-        <div className="list">
-          {items.map((i) => (
-            <ItemRow key={i.id} item={i} onOpen={open} showSubject />
-          ))}
+        <div className="deliv-groups" data-grouping="fecha">
+          <div className="list">
+            {items.map((i) => (
+              <ItemRow key={i.id} item={i} onOpen={open} showSubject />
+            ))}
+          </div>
         </div>
       ) : (
-        groupBySubject(items, subjects).map((g) => {
-          const overdue = g.items.filter(isOverdue).length
-          return (
-            <section key={g.id} className="subject-group" data-subject={g.name}>
-              <h2 className="subject-group-title" style={{ borderLeftColor: g.color ?? 'var(--accent)' }}>
-                <span>{g.name}</span>
-                <span className="count">
-                  {g.items.length} entrega{g.items.length === 1 ? '' : 's'}
-                  {overdue > 0 && <span className="due-over"> · {overdue} fuera de plazo</span>}
-                </span>
-              </h2>
-              {groupByUnit(g.items).map((u) => (
-                <div key={u.key} className="unit-group" data-unit={u.label ?? undefined}>
-                  {u.label && <div className="unit-group-title">{u.label}</div>}
-                  <div className="list">
-                    {u.items.map((i) => (
-                      <ItemRow key={i.id} item={i} onOpen={open} />
-                    ))}
+        <div className="deliv-groups" data-grouping="asignatura">
+          {groupBySubject(items, subjects).map((g) => {
+            const overdue = g.items.filter(isOverdue).length
+            return (
+              <section key={g.id} className="subject-group" data-subject={g.name}>
+                <h2 className="subject-group-title" style={{ borderLeftColor: g.color ?? 'var(--accent)' }}>
+                  <span>{g.name}</span>
+                  <span className="count">
+                    {g.items.length} entrega{g.items.length === 1 ? '' : 's'}
+                    {overdue > 0 && <span className="due-over"> · {overdue} fuera de plazo</span>}
+                  </span>
+                </h2>
+                {groupByUnit(g.items).map((u) => (
+                  <div key={u.key} className="unit-group" data-unit={u.label ?? undefined}>
+                    {u.label && <div className="unit-group-title">{u.label}</div>}
+                    <div className="list">
+                      {u.items.map((i) => (
+                        <ItemRow key={i.id} item={i} onOpen={open} />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </section>
-          )
-        })
+                ))}
+              </section>
+            )
+          })}
+        </div>
       )}
 
       {openItem !== null && (

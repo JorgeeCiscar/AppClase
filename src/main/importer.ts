@@ -427,7 +427,7 @@ function readPage(rawUrl: string, script: string): Promise<Record<string, unknow
       width: 1000,
       height: 760,
       show: false,
-      title: 'Plataforma del curso — AppClase',
+      title: 'Plataforma del curso — Cursia',
       autoHideMenuBar: true,
       webPreferences: {
         partition: PLATFORM_PARTITION,
@@ -472,7 +472,7 @@ function readPage(rawUrl: string, script: string): Promise<Record<string, unknow
       if (page.isLogin === true) {
         sawLogin = true
         if (!win.isVisible()) {
-          win.setTitle('Inicia sesión en la plataforma — AppClase')
+          win.setTitle('Inicia sesión en la plataforma — Cursia')
           win.show()
           win.focus()
         }

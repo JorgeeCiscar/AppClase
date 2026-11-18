@@ -7,32 +7,22 @@ const { chromium } = require('playwright')
 
 const OUT = path.resolve(__dirname, '..', 'build', 'icon.png')
 
-// Una pila de hojas con una marca de «hecho»: el curso ordenado en un solo sitio.
+// Logo de Cursia: una «C» en tres tramos (los mismos trazos que components/Logo.tsx),
+// con colores que se ven bien sobre la barra de tareas clara u oscura.
+const PATHS = [
+  'M46.72 15.65A22 22 0 0 0 18.46 14.66',
+  'M16.17 16.72A22 22 0 0 0 16.17 47.28',
+  'M18.46 49.34A22 22 0 0 0 46.72 48.35'
+]
+const COLORS = ['#1a8c96', '#1a8c96', '#ee8a44']
 const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5b9bff"/>
-      <stop offset="1" stop-color="#2c5fd6"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <rect x="138" y="104" width="214" height="276" rx="24" fill="#fff" opacity=".42"
-        transform="rotate(-9 245 242)"/>
-  <rect x="160" y="126" width="214" height="276" rx="24" fill="#fff"/>
-  <rect x="196" y="180" width="142" height="18" rx="9" fill="#2c5fd6" opacity=".32"/>
-  <rect x="196" y="222" width="112" height="18" rx="9" fill="#2c5fd6" opacity=".32"/>
-  <rect x="196" y="264" width="142" height="18" rx="9" fill="#2c5fd6" opacity=".32"/>
-  <circle cx="364" cy="376" r="66" fill="#2fbf71" stroke="#fff" stroke-width="12"/>
-  <path d="M333 377 l22 22 l42 -46" fill="none" stroke="#fff" stroke-width="16"
-        stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-5 -1 66 66">
+  ${PATHS.map((d, i) => `<path d="${d}" fill="none" stroke="${COLORS[i]}" stroke-width="9.5"/>`).join('\n  ')}
 </svg>`
 
 ;(async () => {
   fs.mkdirSync(path.dirname(OUT), { recursive: true })
-  const browser = await chromium.launch(
-    process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}
-  )
+  const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {})
   const page = await browser.newPage({ viewport: { width: 512, height: 512 }, deviceScaleFactor: 1 })
   await page.setContent(`<html><body style="margin:0;background:transparent">${svg}</body></html>`)
   await page.locator('svg').screenshot({ path: OUT, omitBackground: true })

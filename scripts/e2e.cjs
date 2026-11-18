@@ -941,6 +941,27 @@ function check(name, ok, detail = '') {
     check('Escape sale del modo selección también aquí', (await win.locator('.bulk-bar').count()) === 0)
     server.close()
 
+    // --- apariencia: modo claro y oscuro
+    await win.keyboard.press('Escape')
+    await win.click('.sidebar nav button:has-text("Ajustes")')
+    await win.waitForSelector('.theme-options')
+    const bodyBg = () => win.evaluate(() => getComputedStyle(document.body).backgroundColor)
+    check('por defecto, modo oscuro', (await win.getAttribute('button[name="theme_oscuro"]', 'aria-checked')) === 'true')
+    const darkBg = await bodyBg()
+    await win.click('button[name="theme_claro"]')
+    await win.waitForFunction((bg) => getComputedStyle(document.body).backgroundColor !== bg, darkBg)
+    const lightBg = await bodyBg()
+    const lum = (c) => c.match(/\d+/g).slice(0, 3).reduce((a, n) => a + Number(n), 0)
+    check('el modo claro aclara la interfaz', lum(lightBg) > lum(darkBg) + 300, `${darkBg} → ${lightBg}`)
+    await win.screenshot({ path: path.join(S, 'shots', 'tema-claro.png') })
+    check(
+      'el tema elegido se guarda',
+      (await win.evaluate(() => window.api.settings.get())).theme === 'claro'
+    )
+    await win.click('button[name="theme_oscuro"]')
+    await win.waitForFunction((bg) => getComputedStyle(document.body).backgroundColor === bg, darkBg)
+    check('vuelve al modo oscuro', (await bodyBg()) === darkBg)
+
     check('sin errores de JavaScript en la interfaz', errors.length === 0, errors.join(' | '))
     await app.close()
   }

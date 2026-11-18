@@ -1,7 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import type { DB } from './db'
-import { registerIpc } from './ipc'
+import { applyTheme, getSettings, registerIpc, windowBackground } from './ipc'
 import { closeData, openData, registerSyncIpc } from './sync'
 import { setupUpdater } from './updater'
 import { startWatching, stopWatching } from './watcher'
@@ -9,7 +9,7 @@ import { startWatching, stopWatching } from './watcher'
 // Las pruebas usan su propia carpeta de usuario (y así pueden simular dos ordenadores).
 if (process.env.APPCLASE_CONFIG_DIR) app.setPath('userData', process.env.APPCLASE_CONFIG_DIR)
 
-// Una sola ventana de AppClase: abrirla otra vez lleva a la que ya está abierta.
+// Una sola ventana de Cursia: abrirla otra vez lleva a la que ya está abierta.
 if (!app.requestSingleInstanceLock()) app.quit()
 else
   app.on('second-instance', () => {
@@ -26,8 +26,8 @@ function createWindow(): void {
     height: 860,
     minWidth: 940,
     minHeight: 600,
-    title: 'AppClase',
-    backgroundColor: '#16171b',
+    title: 'Cursia',
+    backgroundColor: windowBackground(),
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -58,6 +58,7 @@ app.whenReady().then(async () => {
   }
   db = await openData(cleanup)
   if (!db) return app.exit(0)
+  applyTheme(getSettings(db).theme)
   registerIpc(db)
   registerSyncIpc()
   startWatching(db)

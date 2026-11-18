@@ -1,6 +1,8 @@
+# productName, appId y el nombre del instalador siguen siendo AppClase: de ellos dependen la
+# carpeta de datos, la instalación y las actualizaciones. El nombre visible es Cursia.
 appId: com.appclase.app
 productName: AppClase
-copyright: AppClase
+copyright: Cursia
 directories:
   output: dist
   buildResources: build
@@ -19,11 +21,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  shortcutName: AppClase
+  shortcutName: Cursia
   artifactName: AppClase-Setup-${version}.exe
   installerLanguages: [es_ES]
   language: "3082"
-  uninstallDisplayName: AppClase
+  uninstallDisplayName: Cursia
 linux:
   icon: build/icon.png
   target: [AppImage]

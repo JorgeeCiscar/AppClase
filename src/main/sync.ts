@@ -57,7 +57,7 @@ async function ask(message: string, detail: string, buttons: string[], testAnswe
   }
   const r = await dialog.showMessageBox({
     type: 'warning',
-    title: 'AppClase',
+    title: 'Cursia',
     message,
     detail,
     buttons,
@@ -104,7 +104,7 @@ export async function openData(cleanup: () => void): Promise<DB | null> {
       const l = lockState(dataDir, me)
       if (l.state === 'libre') break
       const r = await ask(
-        `AppClase está abierta en «${l.info?.host}»`,
+        `Cursia está abierta en «${l.info?.host}»`,
         `Los datos se están usando en el otro ordenador (desde ${fmtTime(l.info?.since)}). Ciérrala allí, ` +
           'espera a que OneDrive termine de sincronizar y pulsa «Reintentar». ' +
           'Si la abres igualmente, el otro ordenador se cerrará al darse cuenta, y lo que cambiaste allí ' +
@@ -147,8 +147,8 @@ function heartbeat(): void {
     if (!TEST)
       await dialog.showMessageBox({
         type: 'warning',
-        title: 'AppClase',
-        message: `Se ha abierto AppClase en «${other?.host ?? 'otro ordenador'}»`,
+        title: 'Cursia',
+        message: `Se ha abierto Cursia en «${other?.host ?? 'otro ordenador'}»`,
         detail: 'Para no mezclar cambios, aquí se cierra. Lo que hiciste antes ya está guardado.',
         buttons: ['Cerrar']
       })
@@ -234,7 +234,7 @@ export function registerSyncIpc(): void {
     const cloud = cloudDataDir(root)
     const cloudFile = join(cloud, DB_FILE)
     if (existsSync(cloudFile)) {
-      if (!opts?.adopt) throw new Error('Ya hay datos de AppClase en OneDrive: elige si usarlos')
+      if (!opts?.adopt) throw new Error('Ya hay datos de Cursia en OneDrive: elige si usarlos')
       const l = lockState(cloud, st.me)
       if (l.state === 'otro') throw new Error(`Ahora están abiertos en «${l.info?.host}»: ciérrala allí primero`)
       // Los datos de este ordenador no se pierden: quedan en su carpeta local.

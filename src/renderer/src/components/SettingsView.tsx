@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Opener, Settings, SyncStatus } from '../../../shared/types'
+import type { Opener, Settings, SyncStatus, Theme } from '../../../shared/types'
 import { errorMessage } from '../util'
 import Modal from './Modal'
 import { describeUpdate, useUpdateStatus } from './UpdateBanner'
@@ -70,6 +70,29 @@ export default function SettingsView({
           onBlur={() => void save(settings)}
         />
       </label>
+
+      <h2>Apariencia</h2>
+      <div className="theme-options" role="radiogroup" aria-label="Tema">
+        {(
+          [
+            ['claro', 'Modo claro'],
+            ['oscuro', 'Modo oscuro'],
+            ['sistema', 'Como el sistema']
+          ] as [Theme, string][]
+        ).map(([t, label]) => (
+          <button
+            key={t}
+            name={`theme_${t}`}
+            role="radio"
+            aria-checked={settings.theme === t}
+            className={settings.theme === t ? 'active' : undefined}
+            onClick={() => void save({ ...settings, theme: t })}
+          >
+            <span className={`theme-swatch ${t}`} />
+            {label}
+          </button>
+        ))}
+      </div>
 
       <h2>Plataforma del curso</h2>
       <p className="muted small" style={{ maxWidth: 620 }}>
@@ -161,7 +184,7 @@ export default function SettingsView({
       <div className="update-row">
         <div>
           <div>
-            AppClase <strong>v{version}</strong>
+            Cursia <strong>v{version}</strong>
           </div>
           <div className="muted small">{describeUpdate(update)}</div>
         </div>
@@ -192,7 +215,7 @@ export default function SettingsView({
                 Carpeta: <code>{sync.dataDir}</code>
               </p>
               <p className="muted small">
-                Abre AppClase en un solo ordenador a la vez: si la abres en otro, te avisará. Antes de cambiar de
+                Abre Cursia en un solo ordenador a la vez: si la abres en otro, te avisará. Antes de cambiar de
                 ordenador, ciérrala y deja que OneDrive termine de sincronizar. Las copias de seguridad automáticas (las
                 10 últimas) están en <code>{sync.backupsDir}</code>.
               </p>
@@ -215,7 +238,7 @@ export default function SettingsView({
                 </p>
               )}
               <p className="muted small" style={{ maxWidth: 620 }}>
-                Guarda los datos de AppClase (asignaturas, entregas, notas e índice de ficheros) en tu OneDrive para
+                Guarda los datos de Cursia (asignaturas, entregas, notas e índice de ficheros) en tu OneDrive para
                 tenerlos en todos tus ordenadores. Actívalo en cada uno.
                 <br />
                 OneDrive de este ordenador: <code>{sync.oneDrive}</code>
@@ -223,7 +246,7 @@ export default function SettingsView({
               {sync.cloudHasData ? (
                 <>
                   <p className="small">
-                    Ya hay datos de AppClase en OneDrive
+                    Ya hay datos de Cursia en OneDrive
                     {sync.otherHost ? ` (ahora abiertos en «${sync.otherHost}»)` : ''}.
                   </p>
                   <div className="row-wrap">
@@ -261,16 +284,16 @@ export default function SettingsView({
           onClose={() => !syncBusy && setSyncDialog(null)}
         >
           <div className="form">
-            {syncDialog === 'subir' && <p>Tus datos se copiarán a OneDrive y AppClase se reiniciará usándolos.</p>}
+            {syncDialog === 'subir' && <p>Tus datos se copiarán a OneDrive y Cursia se reiniciará usándolos.</p>}
             {syncDialog === 'adoptar' && (
               <p>
-                AppClase se reiniciará con los datos que hay en OneDrive (los de tu otro ordenador). Los datos que
-                tenías en este ordenador no se borran: se quedan guardados aparte, pero dejarás de verlos.
+                Cursia se reiniciará con los datos que hay en OneDrive (los de tu otro ordenador). Los datos que tenías
+                en este ordenador no se borran: se quedan guardados aparte, pero dejarás de verlos.
               </p>
             )}
             {syncDialog === 'desactivar' && (
               <p>
-                Se copiará a este ordenador lo que hay ahora en OneDrive y AppClase se reiniciará usando esa copia. Los
+                Se copiará a este ordenador lo que hay ahora en OneDrive y Cursia se reiniciará usando esa copia. Los
                 cambios que hagas aquí ya no llegarán a tus otros ordenadores.
               </p>
             )}
@@ -309,7 +332,7 @@ export default function SettingsView({
         </button>
       </div>
       <p className="muted small" style={{ marginTop: 16 }}>
-        AppClase {version}. Los ficheros nunca se copian ni se mueven: la app guarda su ruta.
+        Cursia {version}. Los ficheros nunca se copian ni se mueven: la app guarda su ruta.
       </p>
     </div>
   )

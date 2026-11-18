@@ -6,7 +6,9 @@ import SearchView from './components/SearchView'
 import SettingsView from './components/SettingsView'
 import SubjectDetail from './components/SubjectDetail'
 import SubjectsView from './components/SubjectsView'
+import Logo from './components/Logo'
 import NavIcon from './components/NavIcon'
+import { applyTheme } from './theme'
 import UpdateBanner, { AppVersion } from './components/UpdateBanner'
 
 type View =
@@ -27,7 +29,17 @@ const NAV: [View['name'], string][] = [
 
 export default function App() {
   const [view, setView] = useState<View>({ name: 'dashboard' })
-  const [settings, setSettings] = useState<Settings>({ course_name: '1º DAW', openers: [], downloads_dir: '' })
+  const [settings, setSettings] = useState<Settings>({
+    course_name: '1º DAW',
+    openers: [],
+    downloads_dir: '',
+    theme: 'oscuro'
+  })
+  /** Guarda los ajustes en el estado y aplica su tema. */
+  const applySettings = (s: Settings): void => {
+    applyTheme(s.theme)
+    setSettings(s)
+  }
   const [toast, setToast] = useState<{ msg: string; bad: boolean } | null>(null)
 
   const showToast = useCallback((msg: string, bad = false) => {
@@ -36,7 +48,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    void window.api.settings.get().then(setSettings)
+    void window.api.settings.get().then(applySettings)
   }, [])
 
   useEffect(() => {
@@ -56,7 +68,8 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          App<span className="brand-mark">Clase</span>
+          <Logo />
+          Cursia
         </div>
         <div className="brand-sub">{settings.course_name}</div>
         <nav>
@@ -81,9 +94,7 @@ export default function App() {
       </aside>
 
       <main className="content">
-        {view.name === 'dashboard' && (
-          <Dashboard openers={settings.openers} onToast={showToast} />
-        )}
+        {view.name === 'dashboard' && <Dashboard openers={settings.openers} onToast={showToast} />}
         {view.name === 'subjects' && <SubjectsView onOpen={(id) => setView({ name: 'subject', id })} />}
         {view.name === 'subject' && (
           <SubjectDetail
@@ -102,7 +113,7 @@ export default function App() {
             onOpenSubject={(id) => setView({ name: 'subject', id })}
           />
         )}
-        {view.name === 'settings' && <SettingsView onSaved={setSettings} onToast={showToast} />}
+        {view.name === 'settings' && <SettingsView onSaved={applySettings} onToast={showToast} />}
       </main>
 
       {toast && <div className={`toast${toast.bad ? ' bad' : ''}`}>{toast.msg}</div>}

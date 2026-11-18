@@ -41,7 +41,7 @@ export default function UpdateBanner() {
   return (
     <div className="update-banner ready">
       <strong>Nueva versión {s.version}</strong>
-      <span className="small">Se instalará al cerrar AppClase.</span>
+      <span className="small">Se instalará al cerrar Cursia.</span>
       <button className="primary" onClick={() => void window.api.app.installUpdate()}>
         Reiniciar y actualizar
       </button>

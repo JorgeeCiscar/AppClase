@@ -126,7 +126,12 @@ export interface Settings {
   openers: Opener[]
   /** Carpeta donde se guardan los ficheros descargados de la plataforma del curso. */
   downloads_dir: string
+  /** Apariencia: claro, oscuro o como el sistema. */
+  theme: Theme
 }
+
+export const THEMES = ['claro', 'oscuro', 'sistema'] as const
+export type Theme = (typeof THEMES)[number]
 
 /** Apartado de un fichero dentro de un elemento. */
 export const FILE_SECTIONS = ['enunciado', 'enviado'] as const

@@ -1,10 +1,10 @@
-import { BrowserWindow, app, dialog, ipcMain, type OpenDialogOptions } from 'electron'
+import { BrowserWindow, app, dialog, ipcMain, nativeTheme, type OpenDialogOptions } from 'electron'
 import { isAbsolute, join } from 'node:path'
 import type { SQLInputValue } from 'node:sqlite'
 import type {
   FileSection, Item, ItemFilter, ItemInput, Opener, Settings, Stats, Subject, SubjectInput, Unit, UnitInput
 } from '../shared/types'
-import { ITEM_KINDS, STATUSES } from '../shared/types'
+import { ITEM_KINDS, STATUSES, THEMES, type Theme } from '../shared/types'
 import { DAW1_SUBJECTS, seedSubjects, transaction, type DB } from './db'
 import {
   addPaths, chooseFiles, chooseFolder, openFile, openWith, relocate, removeItem, revalidate, reveal, searchContent
@@ -312,8 +312,22 @@ export function getSettings(db: DB): Settings {
   return {
     course_name: map.get('course_name') || DEFAULT_COURSE_NAME,
     openers,
-    downloads_dir: map.get('downloads_dir') || defaultDownloadsDir()
+    downloads_dir: map.get('downloads_dir') || defaultDownloadsDir(),
+    theme: THEMES.includes(map.get('theme') as Theme) ? (map.get('theme') as Theme) : 'oscuro'
   }
+}
+
+/** Fondo de la ventana para cada tema (lo que se ve antes de cargar la interfaz). */
+const WINDOW_BG = { dark: '#10141a', light: '#eceef1' }
+export const windowBackground = (): string => (nativeTheme.shouldUseDarkColors ? WINDOW_BG.dark : WINDOW_BG.light)
+
+/**
+ * Aplica el tema: Electron cambia prefers-color-scheme en la interfaz (el CSS hace el
+ * resto) y los controles nativos (barras de desplazamiento, diálogos).
+ */
+export function applyTheme(theme: Theme): void {
+  nativeTheme.themeSource = theme === 'claro' ? 'light' : theme === 'oscuro' ? 'dark' : 'system'
+  for (const w of BrowserWindow.getAllWindows()) w.setBackgroundColor(windowBackground())
 }
 
 export function saveSettings(db: DB, s: Partial<Settings>): Settings {
@@ -332,7 +346,12 @@ export function saveSettings(db: DB, s: Partial<Settings>): Settings {
         .filter((o) => o.name && o.command)
       put.run('openers', JSON.stringify(clean))
     }
+    if (s.theme !== undefined) {
+      if (!THEMES.includes(s.theme)) throw new Error('Tema no válido')
+      put.run('theme', s.theme)
+    }
   })
+  if (s.theme !== undefined) applyTheme(s.theme)
   return getSettings(db)
 }
 

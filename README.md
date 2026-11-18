@@ -1,6 +1,6 @@
-# AppClase
+# Cursia
 
-Aplicación de escritorio para tener el curso en un solo sitio: asignaturas, temas,
+(Antes AppClase.) Aplicación de escritorio para tener el curso en un solo sitio: asignaturas, temas,
 entregas y **todos los ficheros de clase indexados por su ruta**, para abrirlos y
 editarlos con los programas que ya tienes instalados.
 
@@ -61,6 +61,8 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
 - **Importar una actividad desde su enlace** (Aules, Moodle u otra web): se leen el título,
   la asignatura, la fecha de entrega, el enunciado y los adjuntos; se crea el elemento como
   entrega pendiente y los ficheros se descargan a la carpeta del curso y se indexan.
+- **Apariencia**: estilo sobrio con esquinas marcadas y **modo claro, modo oscuro o como el sistema**
+  (Ajustes → Apariencia; se recuerda y se aplica al arrancar, sin parpadeo).
 - **Sincronizar entre ordenadores con OneDrive** (Ajustes → «Sincronizar entre ordenadores»): ver abajo.
 - **Actualizaciones automáticas** desde GitHub Releases, con botón «Buscar actualizaciones»
   en Ajustes y aviso en la barra lateral cuando hay una versión nueva descargada.
@@ -169,6 +171,14 @@ npm run release    # sube la versión (0.1.0 → 0.1.1) en package.json, hace co
 
 En cada push a `main`, `.github/workflows/release.yml` pasa las pruebas en Windows. Si la versión de
 `package.json` aún no está publicada, compila el instalador y lo publica en Releases con la etiqueta `vX.Y.Z`.
+
+## Nombre e identidad
+
+El nombre visible es **Cursia** (ventana, barra superior, accesos directos y desinstalador). Por dentro
+siguen llamándose AppClase la carpeta de datos (`%APPDATA%/AppClase`), el `appId`, el instalador y el
+repositorio, y la carpeta `OneDrive\AppClase`: cambiarlos haría perder los datos o romper las
+actualizaciones. El logo está en `src/renderer/src/components/Logo.tsx` y `scripts/make-icon.cjs`
+genera `build/icon.png` con los mismos trazos.
 
 ## Estructura
 

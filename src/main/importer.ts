@@ -1,7 +1,8 @@
 import { BrowserWindow, session } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
-import type { ActivityFile, DownloadResult, ScrapedActivity } from '../shared/types'
+import type { ActivityFile, DownloadResult, FileSection, ScrapedActivity } from '../shared/types'
+import { FILE_SECTION_LABEL } from '../shared/types'
 import type { DB } from './db'
 import { addPaths } from './files'
 
@@ -33,6 +34,7 @@ const EXTRACT = String.raw`(() => {
   const isLogin = visiblePassword || /\/login\//i.test(location.pathname);
   const body = document.body;
   const isMoodle = !!(body && /\bpath-mod-|\bpagelayout-/.test(body.className))
+    || !!q('[data-for="page-activity-header"]')
     || !!q('[data-region="activity-dates"]') || !!q('a[href*="pluginfile.php"]');
 
   let title = txt(q('.page-header-headings h1')) || txt(q('#region-main h2')) || txt(q('main h1')) || txt(q('h1'));
@@ -48,15 +50,15 @@ const EXTRACT = String.raw`(() => {
     if (parts.length > 1) course = parts[0].trim();
   }
 
-  const descEl = q('.activity-description') || q('#intro') || q('.box.generalbox');
   const root = q('#region-main') || q('main') || body;
-  let description = txt(descEl);
-  if (!description) description = txt(root).slice(0, 4000);
+  // La tarea (texto y ficheros del profesor) está siempre en la cabecera de actividad.
+  const header = q('div.activity-header[data-for="page-activity-header"]') || q('[data-for="page-activity-header"]');
 
-  // Líneas de texto donde buscar la fecha de entrega: primero las zonas de fechas
-  // de Moodle y las tablas de estado, luego todo el contenido principal.
+  // Líneas de texto donde buscar la fecha de entrega y si está calificada: la
+  // cabecera, las zonas de fechas, las tablas de estado y el contenido principal.
   const zones = ['[data-region="activity-dates"]', '.activity-dates', '.submissionstatustable', '.generaltable']
     .map((s) => Array.from(document.querySelectorAll(s))).flat();
+  if (header) zones.unshift(header);
   zones.push(root);
   const lines = [];
   for (const z of zones) {
@@ -66,25 +68,53 @@ const EXTRACT = String.raw`(() => {
     }
   }
 
+  // Texto de la tarea: el de la cabecera, sin las fechas, los requisitos de
+  // finalización ni la lista de adjuntos (esos van aparte).
+  let description = '';
+  if (header) {
+    const hide = Array.from(header.querySelectorAll(
+      '[data-region="activity-dates"], .activity-dates, [data-region="completionrequirements"], ' +
+      '[data-region="completion-info"], .completion-info, .automatic-completion-conditions, ' +
+      '.sr-only, .visually-hidden, [id^="assign_files_tree"], .fileuploadsubmission'));
+    const prev = hide.map((el) => el.style.display);
+    hide.forEach((el) => { el.style.display = 'none'; });
+    description = txt(header);
+    hide.forEach((el, i) => { el.style.display = prev[i]; });
+  } else {
+    const descEl = q('.activity-description') || q('#intro') || q('.box.generalbox');
+    description = txt(descEl) || txt(root).slice(0, 4000);
+  }
+
   const seen = new Set();
   const files = [];
-  for (const a of Array.from(root.querySelectorAll('a[href]'))) {
-    const href = a.href;
-    if (!/^https?:/i.test(href)) continue;
-    const isPluginfile = /pluginfile\.php/i.test(href);
-    const isResource = /mod\/resource\/view\.php/i.test(href);
-    const isDoc = /\.(pdf|docx?|odt|rtf|xlsx?|ods|csv|pptx?|odp|zip|rar|7z|txt|md|java|sql|html?|xml|json|png|jpe?g|gif)(\?|#|$)/i.test(href);
-    if (!isPluginfile && !isResource && !isDoc) continue;
+  const add = (href, name, section) => {
+    if (!/^https?:/i.test(href) || files.length >= 50) return;
     const key = href.split('#')[0];
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return;
     seen.add(key);
-    let name = txt(a);
     if (!name) {
       try { name = decodeURIComponent(key.split('?')[0].split('/').pop() || ''); } catch (e) { name = ''; }
     }
-    const own = /submission_files|assignfeedback|feedback_files/i.test(href);
-    files.push({ name: (name || 'fichero').slice(0, 200), url: key, own });
-    if (files.length >= 50) break;
+    files.push({ name: (name || 'fichero').slice(0, 200), url: key, section });
+  };
+  const isFileLink = (href) => /pluginfile\.php/i.test(href) || /mod\/resource\/view\.php/i.test(href)
+    || /\.(pdf|docx?|odt|rtf|xlsx?|ods|csv|pptx?|odp|zip|rar|7z|txt|md|java|sql|html?|xml|json|png|jpe?g|gif)(\?|#|$)/i.test(href);
+  const isOwn = (href) => /submission_files|assignfeedback|feedback_files/i.test(href);
+
+  // Ficheros del profesor: los de la cabecera (o, en una web sin cabecera, los del contenido).
+  const scope = header || root;
+  for (const a of Array.from(scope.querySelectorAll('a[href]'))) {
+    if (isFileLink(a.href) && !isOwn(a.href)) add(a.href, txt(a), 'enunciado');
+  }
+  // Las imágenes incrustadas en el enunciado también forman parte de él.
+  if (header) {
+    for (const img of Array.from(header.querySelectorAll('img[src]'))) {
+      if (/pluginfile\.php/i.test(img.src)) add(img.src, '', 'enunciado');
+    }
+  }
+  // Tu entrega: se recoge siempre, pero solo se guarda si la tarea está calificada.
+  for (const a of Array.from(document.querySelectorAll('a[href*="submission_files"]'))) {
+    add(a.href, txt(a), 'enviado');
   }
 
   return {
@@ -121,7 +151,11 @@ function sanitizeRaw(raw: unknown): RawPage {
     lines: (Array.isArray(r.lines) ? r.lines : []).filter((l): l is string => typeof l === 'string').slice(0, 600),
     files: files
       .map((f) => (f && typeof f === 'object' ? (f as Record<string, unknown>) : {}))
-      .map((f) => ({ name: str(f.name, 200).trim() || 'fichero', url: str(f.url, 2000), own: f.own === true }))
+      .map((f) => ({
+        name: str(f.name, 200).trim() || 'fichero',
+        url: str(f.url, 2000),
+        section: (f.section === 'enviado' ? 'enviado' : 'enunciado') as FileSection
+      }))
       .filter((f) => /^https?:\/\//i.test(f.url))
       .slice(0, 50)
   }
@@ -215,8 +249,30 @@ function sameUrl(a: string, b: string): boolean {
   }
 }
 
+/** Palabras de «calificada» en castellano, valenciano e inglés. */
+const GRADED_WORD = '(?:calificad[ao]|qualificad[ao]|qualificat|graded)'
+const GRADED_RE = new RegExp(`\\b${GRADED_WORD}\\b`)
+const NOT_GRADED_RE = new RegExp(`\\b(?:no|not|sin|sense)\\s+(?:\\w+\\s+)?${GRADED_WORD}\\b`)
+// Requisito de finalización cumplido: «Hecho: Recibir una calificación», «Fet: Rebre una qualificació», «Done: Receive a grade».
+const GRADE_DONE_RE = /\b(?:hecho|fet|done)\s*:\s*.*\b(?:calificacion|qualificacio|grade)\b/
+
+/**
+ * ¿La tarea aparece como calificada? Se busca en la cabecera y en la tabla de
+ * estado («Estado de la calificación: Calificado», «Qualificat», «Graded»…).
+ * «Sin calificar», «No calificado» o «Para hacer: Recibir una calificación» no cuentan.
+ */
+export function isGraded(lines: string[]): boolean {
+  for (const line of lines) {
+    const l = fold(line)
+    if (NOT_GRADED_RE.test(l)) continue
+    if (GRADED_RE.test(l) || GRADE_DONE_RE.test(l)) return true
+  }
+  return false
+}
+
 function buildActivity(p: RawPage): ScrapedActivity {
   const due = findDueDate(p.lines)
+  const graded = isGraded(p.lines)
   return {
     url: p.url,
     platform: p.platform,
@@ -225,7 +281,9 @@ function buildActivity(p: RawPage): ScrapedActivity {
     description: p.description,
     due_date: due?.date ?? null,
     due_raw: due?.raw ?? null,
-    files: p.files
+    graded,
+    // Tu archivo enviado solo se recoge cuando la tarea está calificada.
+    files: graded ? p.files : p.files.filter((f) => f.section === 'enunciado')
   }
 }
 
@@ -375,12 +433,13 @@ function uniquePath(dir: string, name: string): string {
 /**
  * Descarga los ficheros con la sesión de la plataforma, los guarda en
  * <carpeta de descargas>/<asignatura>/<actividad>/ y los indexa en el elemento.
+ * Tu archivo enviado va aparte, en la subcarpeta «Archivo enviado».
  */
 export async function downloadFiles(
   db: DB,
   downloadsDir: string,
   itemId: number,
-  files: { name: string; url: string }[]
+  files: { name: string; url: string; section?: FileSection }[]
 ): Promise<DownloadResult> {
   const item = db
     .prepare(
@@ -394,10 +453,12 @@ export async function downloadFiles(
   mkdirSync(dir, { recursive: true })
 
   const ses = session.fromPartition(PLATFORM_PARTITION)
-  const saved: string[] = []
+  const saved: Record<FileSection, string[]> = { enunciado: [], enviado: [] }
   const errors: string[] = []
   for (const f of files.slice(0, 50)) {
     const label = safeName(f.name)
+    const section: FileSection = f.section === 'enviado' ? 'enviado' : 'enunciado'
+    const target = section === 'enviado' ? join(dir, FILE_SECTION_LABEL.enviado) : dir
     try {
       if (!/^https?:\/\//i.test(f.url)) throw new Error('enlace no válido')
       const res = await ses.fetch(f.url)
@@ -411,13 +472,22 @@ export async function downloadFiles(
       if (len > MAX_FILE_BYTES) throw new Error('es demasiado grande')
       const buf = Buffer.from(await res.arrayBuffer())
       if (buf.length > MAX_FILE_BYTES) throw new Error('es demasiado grande')
-      const path = uniquePath(dir, safeName(filenameFrom(res, f.url, label), label))
+      mkdirSync(target, { recursive: true })
+      const path = uniquePath(target, safeName(filenameFrom(res, f.url, label), label))
       writeFileSync(path, buf)
-      saved.push(path)
+      saved[section].push(path)
     } catch (e) {
       errors.push(`«${label}»: ${(e as Error).message}`)
     }
   }
-  const indexed = saved.length ? addPaths(db, itemId, saved) : { added: 0, skipped: 0, errors: [] }
-  return { added: indexed.added, skipped: indexed.skipped, errors: [...errors, ...indexed.errors], dir }
+  let added = 0
+  let skipped = 0
+  for (const section of ['enunciado', 'enviado'] as const) {
+    if (!saved[section].length) continue
+    const r = addPaths(db, itemId, saved[section], section)
+    added += r.added
+    skipped += r.skipped
+    errors.push(...r.errors)
+  }
+  return { added, skipped, errors, dir }
 }

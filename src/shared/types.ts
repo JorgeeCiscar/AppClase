@@ -52,6 +52,8 @@ export interface FileRef {
   /** 1 cuando la ruta ya no existe en el disco. */
   missing: number
   added_at: string
+  /** Apartado del elemento; null para los ficheros añadidos a mano. */
+  section: FileSection | null
 }
 
 export interface Item {
@@ -115,12 +117,20 @@ export interface Settings {
   downloads_dir: string
 }
 
+/** Apartado de un fichero dentro de un elemento. */
+export const FILE_SECTIONS = ['enunciado', 'enviado'] as const
+export type FileSection = (typeof FILE_SECTIONS)[number]
+export const FILE_SECTION_LABEL: Record<FileSection, string> = {
+  enunciado: 'Enunciado del profesor',
+  enviado: 'Archivo enviado'
+}
+
 /** Un fichero enlazado en la página de una actividad. */
 export interface ActivityFile {
   name: string
   url: string
-  /** true si es un fichero tuyo (tu entrega o la corrección), no del enunciado. */
-  own: boolean
+  /** «enunciado»: del profesor, en la cabecera de la tarea. «enviado»: tu entrega. */
+  section: FileSection
 }
 
 /** Datos leídos de la página de una actividad (Aules, Moodle u otra web). */
@@ -134,6 +144,8 @@ export interface ScrapedActivity {
   due_date: string | null
   /** Texto original de la fecha de entrega, con la hora (p. ej. «viernes, 21 de noviembre de 2026, 23:59»). */
   due_raw: string | null
+  /** La tarea aparece como calificada: entonces también se recoge tu archivo enviado. */
+  graded: boolean
   files: ActivityFile[]
 }
 
@@ -235,7 +247,7 @@ export interface Api {
     /** Cierra la ventana de lectura en curso. */
     cancel: () => Promise<void>
     /** Descarga ficheros de la plataforma con la sesión iniciada y los indexa en el elemento. */
-    download: (itemId: number, files: { name: string; url: string }[]) => Promise<DownloadResult>
+    download: (itemId: number, files: { name: string; url: string; section: FileSection }[]) => Promise<DownloadResult>
     /** Borra la sesión guardada de la plataforma. */
     logout: () => Promise<void>
   }

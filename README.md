@@ -49,16 +49,24 @@ Botón **«Importar desde enlace…»** en el Panel, en cada asignatura y en Ent
   plataforma pide iniciar sesión, entras con tu usuario en esa ventana y la lectura sigue sola;
   la sesión se recuerda para las siguientes importaciones. «Cerrar sesión de la plataforma»
   (Ajustes) la borra.
-- En Moodle/Aules se leen las zonas de fechas, la descripción, el curso (de la ruta de navegación)
-  y los adjuntos (`pluginfile.php`). En otras webs, el título, los enlaces a documentos y la
-  fecha que siga a «Fecha de entrega», «Fecha límite», «Venciment», «Due»…
+- En Moodle/Aules la tarea se lee de la **cabecera de actividad**
+  (`<div class="activity-header" data-for="page-activity-header">`): su **texto** se copia en las
+  notas (sin las fechas ni los requisitos de finalización) y sus **ficheros** (adjuntos e imágenes
+  del enunciado) se adjuntan en el apartado **«Enunciado del profesor»**. Lo que está fuera de la
+  cabecera se ignora. El curso sale de la ruta de navegación.
+- Si la tarea aparece como **calificada** («Calificado», «Qualificat», «Graded», «Hecho: Recibir
+  una calificación»…), se añade el apartado **«Archivo enviado»** con tu entrega, aparte del
+  enunciado (en disco, en la subcarpeta `Archivo enviado`), y se guarda con estado «corregida».
+  Sin calificar, tu entrega no se recoge.
+- En otras webs (sin esa cabecera) se leen el título, los enlaces a documentos y la fecha que siga
+  a «Fecha de entrega», «Fecha límite», «Venciment», «Due»…
 - Fechas en castellano, valenciano e inglés, y en formato `dd/mm/aaaa`.
 - La asignatura se reconoce por el nombre del curso, también en valenciano («Programació»,
   «Bases de dades»…). Si no encaja ninguna, la eliges en el formulario.
-- Antes de guardar se revisa todo. Se marcan para descargar los ficheros del enunciado; los tuyos
-  (tu entrega, la corrección) aparecen desmarcados.
+- Antes de guardar se revisa todo, y puedes desmarcar cualquier fichero.
 - Los ficheros se guardan en `<carpeta de descargas>/<asignatura>/<actividad>/` (por defecto
-  `Documentos/AppClase`, configurable en Ajustes).
+  `Documentos/AppClase`, configurable en Ajustes). En la ficha del elemento se ven agrupados por
+  apartado; los que añadas a mano aparecen en «Otros ficheros».
 
 ## Desarrollo
 

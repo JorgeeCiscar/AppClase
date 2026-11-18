@@ -230,32 +230,99 @@ function check(name, ok, detail = '') {
     const due1 = await value('.modal input[name="due_date"]')
     check('lee la fecha de vencimiento en valenciano (no la de apertura)', due1 === '2026-11-21', due1)
     const notes1 = await value('.modal textarea[name="notes"]')
-    check('copia el enunciado en las notas', /Feu els exercicis de bucles/.test(notes1))
+    check('copia el texto de la cabecera de la tarea en las notas', /Feu els exercicis de bucles/.test(notes1) && /Entregueu un únic fitxer/.test(notes1))
     check('y la hora de entrega', /23:59/.test(notes1))
-    const boxes = win.locator('.modal .files input[type="checkbox"]')
+    check(
+      'sin copiar las fechas ni los requisitos de finalización',
+      !/Obertura|Fet: Rebre|Requisits de compleció/.test(notes1),
+      notes1.replace(/\s+/g, ' ').slice(0, 160)
+    )
+    check('avisa de que la tarea está calificada', /tarea calificada/.test(await win.locator('.modal .notice').textContent()))
+    const namesIn = (section) => win.locator(`.modal [data-section="${section}"] .fname`).allTextContents()
+    const enun = await namesIn('enunciado')
+    check(
+      'adjunta los ficheros del profesor de la cabecera (incluida la imagen)',
+      enun.length === 3 && ['enunciat tasca 3.pdf', 'Plantilla.java', 'diagrama.png'].every((n) => enun.includes(n)),
+      enun.join(', ')
+    )
+    const env = await namesIn('enviado')
+    check('al estar calificada, añade el apartado «Archivo enviado» con tu entrega', env.length === 1 && env[0] === 'mi-entrega.zip', env.join(', '))
+    check(
+      'ignora los ficheros que están fuera de la cabecera',
+      !(await win.locator('.modal').textContent()).includes('horari.pdf')
+    )
+    const boxes = win.locator('.modal [data-section] input[type="checkbox"]')
     const nBoxes = await boxes.count()
     let nChecked = 0
     for (let i = 0; i < nBoxes; i++) if (await boxes.nth(i).isChecked()) nChecked++
-    check('encuentra los 3 ficheros y marca solo los 2 del enunciado', nBoxes === 3 && nChecked === 2, `${nChecked} de ${nBoxes}`)
+    check('todos marcados para descargar', nBoxes === 4 && nChecked === 4, `${nChecked} de ${nBoxes}`)
     await win.screenshot({ path: path.join(S, 'shots', 'importar.png') })
 
     await win.click('.modal button:has-text("Guardar")')
     await win.waitForSelector('.modal', { state: 'detached', timeout: 30000 })
     const imported = await win.evaluate(async () => (await window.api.items.list({ text: 'Tasca 3' }))[0])
-    check('crea el elemento como entrega pendiente', imported && imported.status === 'pendiente' && imported.kind === 'ejercicio')
+    check('al estar calificada, se guarda como «corregida» (no pendiente)', imported && imported.status === 'corregida' && imported.kind === 'ejercicio', imported && imported.status)
     const files1 = await win.evaluate((id) => window.api.files.list(id), imported.id)
-    check('descarga e indexa los 2 ficheros', files1.length === 2, files1.map((f) => f.name).join(', '))
+    const bySection = (s) => files1.filter((f) => f.section === s).map((f) => f.name).sort()
+    check(
+      'guarda 3 ficheros como enunciado y 1 como archivo enviado',
+      bySection('enunciado').join(',') === 'Plantilla.java,diagrama.png,enunciat tasca 3.pdf' &&
+        bySection('enviado').join(',') === 'mi-entrega.zip',
+      files1.map((f) => `${f.name}[${f.section}]`).join(', ')
+    )
     const pdf = files1.find((f) => f.name === 'enunciat tasca 3.pdf')
     check(
       'el PDF se descarga con la sesión iniciada (no la página de login)',
       !!pdf && fs.readFileSync(pdf.path, 'utf8').startsWith('%PDF-1.4 enunciat'),
       pdf ? pdf.path : '(no está)'
     )
+    const activityDir = path.join(descargas, 'PRO', 'Tasca 3_ bucles')
+    check('el enunciado se guarda en <descargas>/<asignatura>/<actividad>', !!pdf && path.dirname(pdf.path) === activityDir)
+    const sent = files1.find((f) => f.section === 'enviado')
     check(
-      'se guardan en <descargas>/<asignatura>/<actividad>',
-      !!pdf && path.dirname(pdf.path) === path.join(descargas, 'PRO', 'Tasca 3_ bucles')
+      'el archivo enviado va aparte, en la subcarpeta «Archivo enviado»',
+      !!sent && path.dirname(sent.path) === path.join(activityDir, 'Archivo enviado'),
+      sent ? sent.path : '(no está)'
     )
-    check('tu propia entrega no se descarga', !files1.some((f) => f.name.includes('mi-entrega')))
+
+    // En la ficha del elemento, los dos apartados se ven por separado.
+    await win.click('.sidebar nav button:has-text("Entregas")')
+    await win.click('.list-row:has-text("Tasca 3: bucles")')
+    await win.waitForSelector('.modal [data-section="enviado"]')
+    const groupText = async (s) => (await win.locator(`.modal [data-section="${s}"]`).textContent()) || ''
+    const enviadoUi = await groupText('enviado')
+    const enunciadoUi = await groupText('enunciado')
+    check(
+      'la ficha muestra el apartado «Archivo enviado» aparte del enunciado del profesor',
+      enviadoUi.startsWith('Archivo enviado') && enviadoUi.includes('mi-entrega.zip') &&
+        enunciadoUi.startsWith('Enunciado del profesor') && !enunciadoUi.includes('mi-entrega.zip')
+    )
+    await win.screenshot({ path: path.join(S, 'shots', 'ficha-calificada.png') })
+    await win.click('.modal button:has-text("Cerrar")')
+
+    // Tarea sin calificar y solo con texto: el texto va a las notas y no se recoge tu entrega.
+    await win.click('button:has-text("Importar desde enlace")')
+    await win.fill('.modal input[name="activity_url"]', `${base}/mod/assign/view.php?id=8`)
+    await win.click('.modal button:has-text("Leer actividad")')
+    await win.waitForSelector('.modal input[name="title"]', { timeout: 30000 })
+    const t4 = await value('.modal input[name="title"]')
+    check('tarea de solo texto: lee el título', t4 === 'Tarea 4: arrays', t4)
+    const notes4 = await value('.modal textarea[name="notes"]')
+    check('tarea de solo texto: copia el texto en las notas', /Declara un array de 10 enteros/.test(notes4), notes4.slice(0, 80))
+    const due4 = await value('.modal input[name="due_date"]')
+    check('lee «Pendiente:» (Moodle 4 en castellano) como fecha de entrega', due4 === '2026-11-30', due4)
+    check(
+      'sin calificar: no hay apartado «Archivo enviado» ni se recoge tu entrega',
+      (await win.locator('.modal [data-section="enviado"]').count()) === 0 &&
+        !(await win.locator('.modal').textContent()).includes('entrega-arrays.zip')
+    )
+    check('sin calificar: no avisa de calificada', !/tarea calificada/.test(await win.locator('.modal .notice').textContent()))
+    await win.click('.modal button:has-text("Guardar")')
+    await win.waitForSelector('.modal', { state: 'detached', timeout: 30000 })
+    const imported4 = await win.evaluate(async () => (await window.api.items.list({ text: 'Tarea 4' }))[0])
+    const files4 = await win.evaluate((id) => window.api.files.list(id), imported4.id)
+    check('tarea de solo texto: se guarda sin ficheros', files4.length === 0, files4.map((f) => f.name).join(', '))
+    check('sin calificar: se guarda como entrega pendiente', imported4.status === 'pendiente', imported4.status)
 
     // Página genérica (no Moodle) en castellano: no pide sesión.
     await win.click('button:has-text("Importar desde enlace")')

@@ -2,7 +2,7 @@ import { dialog, shell, type BrowserWindow, type OpenDialogOptions } from 'elect
 import { spawn } from 'node:child_process'
 import { readdirSync, readFileSync, statSync, type Dirent, type Stats } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
-import type { AddFilesResult, ContentMatch, FileRef, OpenResult } from '../shared/types'
+import type { AddFilesResult, ContentMatch, FileRef, FileSection, OpenResult } from '../shared/types'
 import { TEXT_EXT } from '../shared/types'
 import { transaction, type DB } from './db'
 
@@ -45,7 +45,7 @@ const isoMtime = (s: Stats): string => new Date(s.mtimeMs).toISOString()
  * Indexa rutas dentro de un elemento. Las carpetas se expanden.
  * No copia nada: el fichero sigue donde esté, y la app guarda su ruta.
  */
-export function addPaths(db: DB, itemId: number, paths: string[]): AddFilesResult {
+export function addPaths(db: DB, itemId: number, paths: string[], section: FileSection | null = null): AddFilesResult {
   const item = db.prepare('SELECT id FROM items WHERE id = ?').get(itemId)
   if (!item) throw new Error('El elemento ya no existe')
 
@@ -66,8 +66,8 @@ export function addPaths(db: DB, itemId: number, paths: string[]): AddFilesResul
   let skipped = 0
   transaction(db, () => {
     const insert = db.prepare(
-      `INSERT INTO files (item_id, path, name, ext, size, mtime, missing)
-       VALUES (?, ?, ?, ?, ?, ?, 0)
+      `INSERT INTO files (item_id, path, name, ext, size, mtime, missing, section)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?)
        ON CONFLICT (item_id, path) DO NOTHING`
     )
     for (const full of expanded.slice(0, MAX_FOLDER_FILES)) {
@@ -78,7 +78,7 @@ export function addPaths(db: DB, itemId: number, paths: string[]): AddFilesResul
         errors.push(`No se puede leer «${basename(full)}»`)
         continue
       }
-      const res = insert.run(itemId, full, basename(full), extname(full).toLowerCase() || null, st.size, isoMtime(st))
+      const res = insert.run(itemId, full, basename(full), extname(full).toLowerCase() || null, st.size, isoMtime(st), section)
       if (res.changes > 0) added++
       else skipped++
     }

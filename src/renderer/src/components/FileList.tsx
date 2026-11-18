@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileRef, Opener } from '../../../shared/types'
+import { FILE_SECTION_LABEL, FILE_SECTIONS } from '../../../shared/types'
 import { errorMessage, fileIcon, fmtDateTime, fmtSize } from '../util'
 
 /**
@@ -55,6 +56,16 @@ export default function FileList({
     void load()
   }
 
+  // Si hay ficheros con apartado (importados de la plataforma), se agrupan:
+  // enunciado del profesor, archivo enviado y, al final, los añadidos a mano.
+  const sectioned = files.some((f) => f.section)
+  const groups: { key: string; label: string | null; list: FileRef[] }[] = sectioned
+    ? [
+        ...FILE_SECTIONS.map((s) => ({ key: s, label: FILE_SECTION_LABEL[s], list: files.filter((f) => f.section === s) })),
+        { key: 'otros', label: 'Otros ficheros', list: files.filter((f) => !f.section) }
+      ].filter((g) => g.list.length > 0)
+    : [{ key: 'todos', label: null, list: files }]
+
   const onDrop = async (e: React.DragEvent): Promise<void> => {
     e.preventDefault()
     dragDepth.current = 0
@@ -90,107 +101,112 @@ export default function FileList({
 
       {files.length === 0 && <p className="muted small">Sin ficheros. Añádelos o arrástralos aquí desde el explorador.</p>}
 
-      <div className="files">
-        {files.map((f) => (
-          <div key={f.id} className={`file-row${f.missing ? ' missing' : ''}`}>
-            <span className="icon">{fileIcon(f.ext)}</span>
-            <div className="col" style={{ minWidth: 0, flex: 1 }}>
-              <div className="fname" title={f.name}>
-                {f.name} {f.missing ? <span className="chip-missing">no se encuentra</span> : null}
-              </div>
-              <div className="fpath" title={f.path}>
-                {f.path}
-              </div>
-              {!f.missing && (
-                <div className="small muted">
-                  {fmtSize(f.size)}
-                  {f.mtime ? ` · modificado ${fmtDateTime(f.mtime)}` : ''}
+      {groups.map((g) => (
+        <div key={g.key} data-section={g.key} className="file-group">
+          {g.label && <div className="file-group-label">{g.label}</div>}
+          <div className="files">
+            {g.list.map((f) => (
+              <div key={f.id} className={`file-row${f.missing ? ' missing' : ''}`}>
+                <span className="icon">{fileIcon(f.ext)}</span>
+                <div className="col" style={{ minWidth: 0, flex: 1 }}>
+                  <div className="fname" title={f.name}>
+                    {f.name} {f.missing ? <span className="chip-missing">no se encuentra</span> : null}
+                  </div>
+                  <div className="fpath" title={f.path}>
+                    {f.path}
+                  </div>
+                  {!f.missing && (
+                    <div className="small muted">
+                      {fmtSize(f.size)}
+                      {f.mtime ? ` · modificado ${fmtDateTime(f.mtime)}` : ''}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {f.missing ? (
-              <button
-                className="tiny"
-                onClick={async () => {
-                  try {
-                    await window.api.files.relocate(f.id)
-                    void load()
-                  } catch (e) {
-                    onToast(errorMessage(e), true)
-                  }
-                }}
-              >
-                Buscar de nuevo…
-              </button>
-            ) : (
-              <>
-                <button className="tiny primary" onClick={() => act(() => window.api.files.open(f.id))}>
-                  Abrir
-                </button>
-                {openers.length > 0 && (
-                  <span style={{ position: 'relative' }}>
-                    <button
-                      className="tiny"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setMenuFor(menuFor === f.id ? null : f.id)
-                      }}
-                    >
-                      Abrir con ▾
+                {f.missing ? (
+                  <button
+                    className="tiny"
+                    onClick={async () => {
+                      try {
+                        await window.api.files.relocate(f.id)
+                        void load()
+                      } catch (e) {
+                        onToast(errorMessage(e), true)
+                      }
+                    }}
+                  >
+                    Buscar de nuevo…
+                  </button>
+                ) : (
+                  <>
+                    <button className="tiny primary" onClick={() => act(() => window.api.files.open(f.id))}>
+                      Abrir
                     </button>
-                    {menuFor === f.id && (
-                      <span
-                        style={{
-                          position: 'absolute',
-                          right: 0,
-                          top: '100%',
-                          marginTop: 4,
-                          background: 'var(--panel)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 6,
-                          zIndex: 20,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          minWidth: 150
-                        }}
-                      >
-                        {openers.map((o, idx) => (
-                          <button
-                            key={o.name + idx}
-                            className="ghost tiny"
-                            style={{ textAlign: 'left' }}
-                            onClick={() => {
-                              setMenuFor(null)
-                              void act(() => window.api.files.openWith(f.id, idx))
+                    {openers.length > 0 && (
+                      <span style={{ position: 'relative' }}>
+                        <button
+                          className="tiny"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setMenuFor(menuFor === f.id ? null : f.id)
+                          }}
+                        >
+                          Abrir con ▾
+                        </button>
+                        {menuFor === f.id && (
+                          <span
+                            style={{
+                              position: 'absolute',
+                              right: 0,
+                              top: '100%',
+                              marginTop: 4,
+                              background: 'var(--panel)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 6,
+                              zIndex: 20,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              minWidth: 150
                             }}
                           >
-                            {o.name}
-                          </button>
-                        ))}
+                            {openers.map((o, idx) => (
+                              <button
+                                key={o.name + idx}
+                                className="ghost tiny"
+                                style={{ textAlign: 'left' }}
+                                onClick={() => {
+                                  setMenuFor(null)
+                                  void act(() => window.api.files.openWith(f.id, idx))
+                                }}
+                              >
+                                {o.name}
+                              </button>
+                            ))}
+                          </span>
+                        )}
                       </span>
                     )}
-                  </span>
+                    <button className="tiny" onClick={() => act(() => window.api.files.reveal(f.id))}>
+                      Carpeta
+                    </button>
+                  </>
                 )}
-                <button className="tiny" onClick={() => act(() => window.api.files.reveal(f.id))}>
-                  Carpeta
+                <button
+                  className="tiny danger"
+                  title="Quitar del índice (el fichero no se borra del disco)"
+                  onClick={async () => {
+                    await window.api.files.remove(f.id)
+                    void load()
+                    onChanged?.()
+                  }}
+                >
+                  Quitar
                 </button>
-              </>
-            )}
-            <button
-              className="tiny danger"
-              title="Quitar del índice (el fichero no se borra del disco)"
-              onClick={async () => {
-                await window.api.files.remove(f.id)
-                void load()
-                onChanged?.()
-              }}
-            >
-              Quitar
-            </button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
 
       <div
         className={`dropzone${over ? ' over' : ''}`}

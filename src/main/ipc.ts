@@ -2,7 +2,7 @@ import { BrowserWindow, app, dialog, ipcMain, type OpenDialogOptions } from 'ele
 import { isAbsolute, join } from 'node:path'
 import type { SQLInputValue } from 'node:sqlite'
 import type {
-  Item, ItemFilter, ItemInput, Opener, Settings, Stats, Subject, SubjectInput, Unit, UnitInput
+  FileSection, Item, ItemFilter, ItemInput, Opener, Settings, Stats, Subject, SubjectInput, Unit, UnitInput
 } from '../shared/types'
 import { ITEM_KINDS, STATUSES } from '../shared/types'
 import { DAW1_SUBJECTS, seedSubjects, transaction, type DB } from './db'
@@ -407,7 +407,7 @@ export function registerIpc(db: DB): void {
 
   h('importer:read', (url: string) => readActivity(url))
   h('importer:cancel', () => cancelRead())
-  h('importer:download', (itemId: number, files: { name: string; url: string }[]) =>
+  h('importer:download', (itemId: number, files: { name: string; url: string; section?: FileSection }[]) =>
     downloadFiles(db, getSettings(db).downloads_dir, itemId, Array.isArray(files) ? files : [])
   )
   h('importer:logout', () => logoutPlatform())

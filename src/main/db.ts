@@ -63,6 +63,10 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX idx_item_tags_tag ON item_tags(tag);
 
   CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+  `,
+  // v0.3: apartado de cada fichero («enunciado» del profesor o «enviado» por ti).
+  `
+  ALTER TABLE files ADD COLUMN section TEXT;
   `
 ]
 

@@ -106,6 +106,8 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
 .chip-missing { background: #3a1f1f; border: 1px solid var(--bad); color: #ffd9d7; font-size: 11px; padding: 1px 7px; border-radius: 99px; }
 
 .files { display: flex; flex-direction: column; gap: 6px; }
+.file-group + .file-group { margin-top: 14px; }
+.file-group-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
 .file-row { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .file-row.missing { border-color: var(--bad); }
 .file-row .icon { font-size: 18px; }

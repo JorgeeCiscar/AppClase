@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Item, ScrapedActivity, Subject } from '../../../shared/types'
+import { FILE_SECTION_LABEL, FILE_SECTIONS } from '../../../shared/types'
 import { matchSubject } from '../../../shared/match'
 import { errorMessage, fmtDate } from '../util'
 import ItemForm from './ItemForm'
@@ -43,8 +44,8 @@ function ImportDialog({
       setSubjects(list)
       setAct(a)
       setMatched(matchSubject(a.course, a.title, list))
-      // Se marcan los ficheros del enunciado; los tuyos (entrega, corrección) no.
-      setSelected(new Set(a.files.filter((f) => !f.own).map((f) => f.url)))
+      // Se marca todo lo recogido: el enunciado y, si está calificada, tu archivo enviado.
+      setSelected(new Set(a.files.map((f) => f.url)))
       setStep('form')
     } catch (err) {
       setError(errorMessage(err))
@@ -127,29 +128,46 @@ function ImportDialog({
           · <strong>no se encontró la fecha de entrega</strong>, revísala
         </>
       )}
+      {act.graded && (
+        <>
+          {' '}
+          · <strong>tarea calificada</strong>: se guarda también tu archivo enviado
+        </>
+      )}
     </div>
   )
 
   const footer = (
     <div>
-      <div className="field" style={{ marginBottom: 6 }}>
-        Ficheros de la actividad
-      </div>
-      {act.files.length === 0 ? (
-        <p className="muted small">La página no tiene ficheros adjuntos.</p>
-      ) : (
-        <div className="files">
-          {act.files.map((f) => (
-            <label key={f.url} className="file-row clickable" style={{ gap: 8 }}>
-              <input type="checkbox" checked={selected.has(f.url)} onChange={() => toggle(f.url)} />
-              <span className="fname" style={{ flex: 1 }}>
-                {f.name}
-              </span>
-              {f.own && <span className="badge tag">tuyo</span>}
-            </label>
-          ))}
-        </div>
+      {act.files.length === 0 && (
+        <>
+          <div className="field" style={{ marginBottom: 6 }}>
+            {FILE_SECTION_LABEL.enunciado}
+          </div>
+          <p className="muted small">La tarea no tiene ficheros adjuntos: su texto se ha copiado en las notas.</p>
+        </>
       )}
+      {FILE_SECTIONS.map((section) => {
+        const list = act.files.filter((f) => f.section === section)
+        if (!list.length) return null
+        return (
+          <div key={section} data-section={section} style={{ marginBottom: 10 }}>
+            <div className="field" style={{ marginBottom: 6 }}>
+              {FILE_SECTION_LABEL[section]}
+            </div>
+            <div className="files">
+              {list.map((f) => (
+                <label key={f.url} className="file-row clickable" style={{ gap: 8 }}>
+                  <input type="checkbox" checked={selected.has(f.url)} onChange={() => toggle(f.url)} />
+                  <span className="fname" style={{ flex: 1 }}>
+                    {f.name}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )
+      })}
       {act.files.length > 0 && (
         <p className="muted small" style={{ marginTop: 6 }}>
           Los marcados se descargan con tu sesión y se guardan en la carpeta del curso (Ajustes).
@@ -170,13 +188,16 @@ function ImportDialog({
         notes,
         url: act.url,
         due_date: act.due_date ?? '',
-        status: 'pendiente'
+        // Una tarea ya calificada no está pendiente: si no, saldría «fuera de plazo» en el Panel.
+        status: act.graded ? 'corregida' : 'pendiente'
       }}
       header={header}
       footer={footer}
       onClose={onClose}
       onSaved={async (item) => {
-        const files = act.files.filter((f) => selected.has(f.url)).map(({ name, url: u }) => ({ name, url: u }))
+        const files = act.files
+          .filter((f) => selected.has(f.url))
+          .map(({ name, url: u, section }) => ({ name, url: u, section }))
         if (files.length === 0) {
           onToast('Actividad guardada')
         } else {

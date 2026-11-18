@@ -25,7 +25,9 @@ const api: Api = {
     remove: invoke('items:remove'),
     setStatus: invoke('items:setStatus'),
     addTag: invoke('items:addTag'),
-    removeTag: invoke('items:removeTag')
+    removeTag: invoke('items:removeTag'),
+    bulkUpdate: invoke('items:bulkUpdate'),
+    bulkRemove: invoke('items:bulkRemove')
   },
   files: {
     list: invoke('files:list'),

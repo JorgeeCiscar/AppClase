@@ -178,6 +178,76 @@ export function saveItem(db: DB, i: ItemInput): Item {
   return withTags<Item>(db.prepare(`${ITEM_SELECT} WHERE i.id = ?`).get(id) as Row)
 }
 
+/** Cambios en bloque sobre varias entregas seleccionadas. */
+export interface BulkPatch {
+  status?: string | null
+  subject_id?: number
+  addTag?: string
+  /** Solo con una entrega seleccionada. */
+  grade?: number | null
+}
+
+const MAX_BULK = 1000
+
+function cleanIds(ids: unknown): number[] {
+  if (!Array.isArray(ids)) throw new Error('No hay entregas seleccionadas')
+  const out = [...new Set(ids.map(Number).filter((n) => Number.isInteger(n) && n > 0))]
+  if (!out.length) throw new Error('No hay entregas seleccionadas')
+  if (out.length > MAX_BULK) throw new Error(`Como mucho ${MAX_BULK} entregas a la vez`)
+  return out
+}
+
+/**
+ * Aplica un cambio a varias entregas a la vez, todo o nada. Al cambiar de asignatura,
+ * cada entrega pasa a la unidad equivalente de la nueva (mismo número o nombre) o, si
+ * no la tiene, se queda sin unidad: nunca apunta a una unidad de otra asignatura.
+ */
+export function bulkUpdate(db: DB, rawIds: unknown, patch: BulkPatch): number {
+  const ids = cleanIds(rawIds)
+  const p = patch && typeof patch === 'object' ? patch : {}
+  return transaction(db, () => {
+    let changed = 0
+    if ('status' in p) {
+      const st = nullIfEmpty(p.status)
+      if (st && !STATUSES.includes(st as (typeof STATUSES)[number])) throw new Error('Estado no válido')
+      const upd = db.prepare('UPDATE items SET status = ? WHERE id = ?')
+      for (const id of ids) changed += Number(upd.run(st, id).changes)
+    }
+    if (p.subject_id !== undefined) {
+      const target = Number(p.subject_id)
+      if (!db.prepare('SELECT id FROM subjects WHERE id = ?').get(target)) throw new Error('La asignatura no existe')
+      const units = db.prepare('SELECT id, number, title FROM units WHERE subject_id = ?').all(target) as {
+        id: number
+        number: number | null
+        title: string
+      }[]
+      const current = db.prepare(
+        'SELECT i.subject_id, u.number, u.title FROM items i LEFT JOIN units u ON u.id = i.unit_id WHERE i.id = ?'
+      )
+      const upd = db.prepare('UPDATE items SET subject_id = ?, unit_id = ? WHERE id = ?')
+      for (const id of ids) {
+        const row = current.get(id) as { subject_id: number; number: number | null; title: string | null } | undefined
+        if (!row || row.subject_id === target) continue
+        const unit = row.title !== null ? findUnit(units, { number: row.number, title: row.title }) : undefined
+        changed += Number(upd.run(target, unit ? unit.id : null, id).changes)
+      }
+    }
+    if (p.addTag !== undefined) {
+      const tag = normalizeTag(String(p.addTag ?? ''))
+      if (!tag) throw new Error('Escribe la etiqueta')
+      const ins = db.prepare('INSERT INTO item_tags (item_id, tag) VALUES (?, ?) ON CONFLICT DO NOTHING')
+      for (const id of ids) changed += Number(ins.run(id, tag).changes)
+    }
+    if ('grade' in p) {
+      if (ids.length !== 1) throw new Error('La nota se pone a una sola entrega')
+      const g = p.grade === null || p.grade === undefined || String(p.grade) === '' ? null : Number(p.grade)
+      if (g !== null && (Number.isNaN(g) || g < 0 || g > 10)) throw new Error('La nota debe estar entre 0 y 10')
+      changed += Number(db.prepare('UPDATE items SET grade = ? WHERE id = ?').run(g, ids[0]).changes)
+    }
+    return changed
+  })
+}
+
 export function listItems(db: DB, f: ItemFilter = {}): Item[] {
   const where: string[] = []
   const params: SQLInputValue[] = []
@@ -352,6 +422,25 @@ export function registerIpc(db: DB): void {
     const t = normalizeTag(tag)
     if (t) db.prepare('INSERT INTO item_tags (item_id, tag) VALUES (?, ?) ON CONFLICT DO NOTHING').run(id, t)
   })
+  h('items:bulkUpdate', (ids: number[], patch: BulkPatch) => bulkUpdate(db, ids, patch))
+  // Borrar varias: una a una, para que cada una lleve sus ficheros a la papelera.
+  h('items:bulkRemove', (ids: number[], opts?: { trashFiles?: boolean }) =>
+    synced(
+      (async () => {
+        let trashed = 0
+        let removed = 0
+        const errors: string[] = []
+        const dir = getSettings(db).downloads_dir
+        for (const id of cleanIds(ids)) {
+          const r = await removeItem(db, id, opts?.trashFiles === true, dir)
+          trashed += r.trashed
+          removed++
+          errors.push(...r.errors)
+        }
+        return { removed, trashed, errors }
+      })()
+    )
+  )
   h('items:removeTag', (id: number, tag: string) => {
     db.prepare('DELETE FROM item_tags WHERE item_id = ? AND tag = ? COLLATE NOCASE').run(id, tag)
   })

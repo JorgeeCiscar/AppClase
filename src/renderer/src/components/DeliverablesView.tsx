@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Item, Opener, Status, Subject } from '../../../shared/types'
 import { STATUSES } from '../../../shared/types'
 import { URGENCY_LABEL, URGENCY_ORDER, today } from '../util'
+import BulkBar from './BulkBar'
 import EditItemDialog from './EditItemDialog'
 import ImportButton from './ImportActivity'
 import ItemDetail from './ItemDetail'
@@ -21,6 +22,24 @@ function readGrouping(): Grouping {
 function saveGrouping(g: Grouping): void {
   try {
     localStorage.setItem(GROUPING_KEY, g)
+  } catch {
+    /* sin almacenamiento: se queda solo para esta vez */
+  }
+}
+
+/** Asignaturas plegadas, recordadas en este ordenador. */
+const COLLAPSED_KEY = 'appclase.entregas.plegadas'
+function readCollapsed(): Set<number> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(COLLAPSED_KEY) || '[]')
+    return new Set(Array.isArray(raw) ? raw.map(Number).filter(Number.isFinite) : [])
+  } catch {
+    return new Set()
+  }
+}
+function saveCollapsed(c: Set<number>): void {
+  try {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...c]))
   } catch {
     /* sin almacenamiento: se queda solo para esta vez */
   }
@@ -102,6 +121,34 @@ export default function DeliverablesView({
   const [openItem, setOpenItem] = useState<number | null>(null)
   const [editing, setEditing] = useState<Item | null>(null)
   const [refresh, setRefresh] = useState(0)
+  const [collapsed, setCollapsed] = useState<Set<number>>(readCollapsed)
+  const [selecting, setSelecting] = useState(false)
+  const [picked, setPicked] = useState<Set<number>>(new Set())
+
+  const updateCollapsed = (fn: (c: Set<number>) => Set<number>): void =>
+    setCollapsed((prev) => {
+      const next = fn(new Set(prev))
+      saveCollapsed(next)
+      return next
+    })
+  const togglePicked = (ids: number[], on?: boolean): void =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      const add = on ?? !ids.every((id) => next.has(id))
+      for (const id of ids) {
+        if (add) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
+  const startSelecting = (): void => {
+    setOpenItem(null)
+    setSelecting(true)
+  }
+  const stopSelecting = (): void => {
+    setSelecting(false)
+    setPicked(new Set())
+  }
 
   const load = useCallback(async () => {
     const [list, subs] = await Promise.all([
@@ -122,20 +169,25 @@ export default function DeliverablesView({
     return window.api.files.onChanged(() => void load())
   }, [load])
 
-  // Escape cierra la ficha lateral (si no hay una ventana abierta encima).
+  // Escape cierra la ficha lateral o sale del modo selección (si no hay una ventana encima).
   useEffect(() => {
-    if (openItem === null) return
+    if (openItem === null && !selecting) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && !document.querySelector('.modal')) setOpenItem(null)
+      if (e.key !== 'Escape' || document.querySelector('.modal')) return
+      if (selecting) stopSelecting()
+      else setOpenItem(null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openItem])
+  }, [openItem, selecting])
 
-  const open = (x: Item): void => setOpenItem(x.id)
+  // En modo selección, pulsar una tarjeta la marca; si no, abre su ficha al lado.
+  const open = (x: Item): void => (selecting ? togglePicked([x.id]) : setOpenItem(x.id))
+  const pickedItems = items.filter((i) => picked.has(i.id))
+  const groups = grouping === 'asignatura' ? groupBySubject(items, subjects) : []
 
   return (
-    <div className={`page deliv-page${openItem !== null ? ' with-detail' : ''}`}>
+    <div className={`page deliv-page${openItem !== null ? ' with-detail' : ''}${selecting ? ' selecting' : ''}`}>
       <div className="deliv-layout">
         <div className="deliv-main">
           <div className="page-header">
@@ -168,6 +220,41 @@ export default function DeliverablesView({
               <input type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
               solo fuera de plazo
             </label>
+            <span className="spacer" />
+            {grouping === 'asignatura' && groups.length > 0 && (
+              <>
+                <button
+                  className="ghost small"
+                  onClick={() => updateCollapsed(() => new Set(groups.map((g) => g.id)))}
+                  disabled={groups.every((g) => collapsed.has(g.id))}
+                >
+                  Plegar todas
+                </button>
+                <button
+                  className="ghost small"
+                  onClick={() => updateCollapsed(() => new Set())}
+                  disabled={!groups.some((g) => collapsed.has(g.id))}
+                >
+                  Desplegar todas
+                </button>
+              </>
+            )}
+            {selecting ? (
+              <button
+                onClick={() =>
+                  togglePicked(
+                    items.map((i) => i.id),
+                    pickedItems.length < items.length
+                  )
+                }
+              >
+                {pickedItems.length < items.length ? 'Seleccionar todas' : 'Quitar selección'}
+              </button>
+            ) : (
+              <button onClick={startSelecting} disabled={items.length === 0}>
+                Seleccionar
+              </button>
+            )}
           </div>
           <div className="urg-legend" aria-label="Colores según el plazo">
             {URGENCY_ORDER.map((u) => (
@@ -183,37 +270,106 @@ export default function DeliverablesView({
             <div className="deliv-groups" data-grouping="fecha">
               <div className="list">
                 {items.map((i) => (
-                  <ItemRow key={i.id} item={i} onOpen={open} showSubject selected={i.id === openItem} />
+                  <ItemRow
+                    key={i.id}
+                    item={i}
+                    onOpen={open}
+                    showSubject
+                    selected={i.id === openItem}
+                    selectable={selecting}
+                    checked={picked.has(i.id)}
+                  />
                 ))}
               </div>
             </div>
           ) : (
             <div className="deliv-groups" data-grouping="asignatura">
-              {groupBySubject(items, subjects).map((g) => {
+              {groups.map((g) => {
                 const overdue = g.items.filter(isOverdue).length
+                const isCollapsed = collapsed.has(g.id)
+                const groupIds = g.items.map((i) => i.id)
+                const nPicked = groupIds.filter((id) => picked.has(id)).length
                 return (
-                  <section key={g.id} className="subject-group" data-subject={g.name}>
+                  <section
+                    key={g.id}
+                    className={`subject-group${isCollapsed ? ' collapsed' : ''}`}
+                    data-subject={g.name}
+                  >
                     <h2 className="subject-group-title" style={{ borderLeftColor: g.color ?? 'var(--accent)' }}>
-                      <span>{g.name}</span>
+                      {selecting && (
+                        <input
+                          type="checkbox"
+                          className="group-check"
+                          aria-label={`Seleccionar todas las de ${g.name}`}
+                          checked={nPicked === groupIds.length}
+                          ref={(el) => {
+                            if (el) el.indeterminate = nPicked > 0 && nPicked < groupIds.length
+                          }}
+                          onChange={(e) => togglePicked(groupIds, e.target.checked)}
+                        />
+                      )}
+                      <button
+                        className="group-toggle"
+                        aria-expanded={!isCollapsed}
+                        title={isCollapsed ? 'Desplegar' : 'Plegar'}
+                        onClick={() =>
+                          updateCollapsed((c) => {
+                            if (c.has(g.id)) c.delete(g.id)
+                            else c.add(g.id)
+                            return c
+                          })
+                        }
+                      >
+                        <span className="chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                        <span>{g.name}</span>
+                      </button>
                       <span className="count">
                         {g.items.length} entrega{g.items.length === 1 ? '' : 's'}
                         {overdue > 0 && <span className="due-over"> · {overdue} fuera de plazo</span>}
+                        {selecting && nPicked > 0 && (
+                          <span>
+                            {' '}
+                            · {nPicked} seleccionada{nPicked === 1 ? '' : 's'}
+                          </span>
+                        )}
                       </span>
                     </h2>
-                    {groupByUnit(g.items).map((u) => (
-                      <div key={u.key} className="unit-group" data-unit={u.label ?? undefined}>
-                        {u.label && <div className="unit-group-title">{u.label}</div>}
-                        <div className="list">
-                          {u.items.map((i) => (
-                            <ItemRow key={i.id} item={i} onOpen={open} selected={i.id === openItem} />
-                          ))}
+                    {!isCollapsed &&
+                      groupByUnit(g.items).map((u) => (
+                        <div key={u.key} className="unit-group" data-unit={u.label ?? undefined}>
+                          {u.label && <div className="unit-group-title">{u.label}</div>}
+                          <div className="list">
+                            {u.items.map((i) => (
+                              <ItemRow
+                                key={i.id}
+                                item={i}
+                                onOpen={open}
+                                selected={i.id === openItem}
+                                selectable={selecting}
+                                checked={picked.has(i.id)}
+                              />
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
                   </section>
                 )
               })}
             </div>
+          )}
+          {selecting && (
+            <BulkBar
+              selected={pickedItems}
+              subjects={subjects}
+              onToast={onToast}
+              onCancel={stopSelecting}
+              onDone={(removedIds) => {
+                if (removedIds) togglePicked(removedIds, false)
+                void load()
+              }}
+            />
           )}
         </div>
 

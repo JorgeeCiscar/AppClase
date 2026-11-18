@@ -676,6 +676,110 @@ function check(name, ok, detail = '') {
         fs.existsSync(javaFile) && fs.existsSync(renamedTxt)
     )
 
+    // --- Entregas: nombres de asignatura algo más grandes y asignaturas plegables ---
+    const waitFor = async (cond) => {
+      for (let i = 0; i < 40; i++) {
+        if (await cond()) return true
+        await sleep(100)
+      }
+      return false
+    }
+    await win.click('.sidebar nav button:has-text("Panel")')
+    await win.click('.sidebar nav button:has-text("Entregas")')
+    await win.waitForSelector('.subject-group')
+    const titleSize = await win.locator('.subject-group-title').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
+    check('los nombres de las asignaturas son un poco más grandes (17 px)', titleSize === 17, `${titleSize}px`)
+    const proGroup = '.subject-group[data-subject="Programación"]'
+    const proCards = () => win.locator(`${proGroup} .list-row`).count()
+    const proBefore = await proCards()
+    await win.click(`${proGroup} .group-toggle`)
+    check('al pulsar el nombre, la asignatura se pliega', proBefore > 0 && (await proCards()) === 0, `${proBefore} → ${await proCards()}`)
+    check(
+      'plegada, la cabecera sigue diciendo cuántas tiene',
+      new RegExp(`${proBefore} entregas`).test((await win.locator(`${proGroup} .subject-group-title`).textContent()) || '')
+    )
+    await win.click('.sidebar nav button:has-text("Panel")')
+    await win.click('.sidebar nav button:has-text("Entregas")')
+    await win.waitForSelector(proGroup)
+    check('recuerda qué asignaturas dejaste plegadas', (await proCards()) === 0)
+    await win.click(`${proGroup} .group-toggle`)
+    check('y se vuelve a desplegar', (await proCards()) === proBefore)
+    await win.click('button:has-text("Plegar todas")')
+    check('«Plegar todas» las pliega todas', (await win.locator('.subject-group .list-row').count()) === 0)
+    await win.click('button:has-text("Desplegar todas")')
+    check('«Desplegar todas» las despliega', (await win.locator('.subject-group .list-row').count()) > 0)
+
+    // --- Seleccionar entregas y actuar sobre ellas ---
+    const card = (t) => `.list-row:has-text("${t}")`
+    const getItem = (t) => win.evaluate(async (text) => (await window.api.items.list({ text }))[0], t)
+    const barText = async () => (await win.locator('.bulk-bar').textContent()) || ''
+    await win.click('.deliv-main button:text-is("Seleccionar")')
+    await win.waitForSelector('.bulk-bar')
+    await win.click(card('U-tiempo de sobra'))
+    await win.click(card('U-esta semana'))
+    check(
+      'en modo selección, pulsar las tarjetas las marca (sin abrir la ficha)',
+      (await win.locator('.list-row.is-checked').count()) === 2 && (await win.locator('.detail-pane').count()) === 0
+    )
+    check('la barra dice cuántas hay seleccionadas', /2 seleccionadas/.test(await barText()))
+    check('«Añadir nota» está desactivado con más de una', await win.locator('.bulk-bar button:has-text("Añadir nota")').isDisabled())
+    await win.screenshot({ path: path.join(S, 'shots', 'seleccion.png') })
+
+    await win.selectOption('select[name="bulk_status"]', 'entregada')
+    await waitFor(async () => (await getItem('U-esta semana')).status === 'entregada')
+    check(
+      'cambiar el estado de varias a la vez',
+      (await getItem('U-tiempo de sobra')).status === 'entregada' && (await getItem('U-esta semana')).status === 'entregada'
+    )
+    check('la selección se mantiene tras una acción', /2 seleccionadas/.test(await barText()))
+
+    await win.click('.bulk-bar button:has-text("Añadir etiqueta")')
+    await win.fill('.modal input[name="bulk_tag"]', 'repaso')
+    await win.click('.modal button:has-text("Añadir")')
+    await win.waitForSelector('.modal', { state: 'detached' })
+    check(
+      'añadir una etiqueta a varias a la vez',
+      (await getItem('U-tiempo de sobra')).tags.includes('repaso') && (await getItem('U-esta semana')).tags.includes('repaso')
+    )
+
+    await win.click(card('U-esta semana'))
+    check('con una sola seleccionada, «Añadir nota» se activa', !(await win.locator('.bulk-bar button:has-text("Añadir nota")').isDisabled()))
+    await win.click('.bulk-bar button:has-text("Añadir nota")')
+    await win.fill('.modal input[name="bulk_grade"]', '7,5')
+    await win.click('.modal button:has-text("Guardar nota")')
+    await win.waitForSelector('.modal', { state: 'detached' })
+    check('añadir nota a la seleccionada (acepta coma decimal)', (await getItem('U-tiempo de sobra')).grade === 7.5)
+
+    // Cambiar de asignatura: «Tarea 5» está en la unidad 4 de Programación; Sistemas no tiene unidad 4.
+    await win.click(card('Tarea 5: funciones'))
+    await win.selectOption('select[name="bulk_subject"]', idOf('Sistemas informáticos'))
+    await waitFor(async () => String((await getItem('Tarea 5')).subject_id) === idOf('Sistemas informáticos'))
+    const t5 = await getItem('Tarea 5')
+    const ut = await getItem('U-tiempo de sobra')
+    check(
+      'cambiar de asignatura a varias a la vez',
+      String(t5.subject_id) === idOf('Sistemas informáticos') && String(ut.subject_id) === idOf('Sistemas informáticos')
+    )
+    check('si la nueva asignatura no tiene su unidad, queda sin unidad (nunca apunta a otra asignatura)', t5.unit_id === null)
+
+    await win.click('.bulk-bar button:has-text("Eliminar")')
+    await win.waitForSelector('.modal:has-text("¿Eliminar 2 entregas?")')
+    await win.click('.modal button.danger-solid')
+    await win.waitForSelector('.modal', { state: 'detached' })
+    check('eliminar varias a la vez', !(await getItem('U-tiempo de sobra')) && !(await getItem('Tarea 5')))
+    check('tras eliminarlas, la selección queda vacía', /Ninguna seleccionada/.test(await barText()))
+
+    const edGroup = '.subject-group[data-subject="Entornos de desarrollo"]'
+    await win.check(`${edGroup} .group-check`)
+    const edCards = await win.locator(`${edGroup} .list-row`).count()
+    check(
+      'la casilla de la asignatura selecciona todas las suyas',
+      edCards > 0 && (await win.locator(`${edGroup} .list-row.is-checked`).count()) === edCards,
+      `${edCards} tarjetas`
+    )
+    await win.keyboard.press('Escape')
+    check('Escape sale del modo selección', (await win.locator('.bulk-bar').count()) === 0 && (await win.locator('.list-row.is-checked').count()) === 0)
+
     check('sin errores de JavaScript en la interfaz', errors.length === 0, errors.join(' | '))
     await app.close()
   }

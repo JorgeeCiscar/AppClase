@@ -37,10 +37,15 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
 - **Panel** con lo que está fuera de plazo, lo que vence en dos semanas y los últimos
   ficheros añadidos.
 - **Entregas**: todo lo que tiene fecha límite, en **tarjetas**; al pulsar una, su **ficha se abre
-  al lado** sin tapar las demás (Escape la cierra). Las tarjetas van **agrupadas por asignatura y,
+  al lado** sin tapar las demás (Escape la cierra). Cada asignatura se puede **plegar** pulsando su nombre (o todas a la vez), y
+  la app recuerda cuáles dejaste plegadas. Las tarjetas van **agrupadas por asignatura y,
   dentro, por unidad**
   (en el orden de la pestaña Asignaturas, con cuántas hay y cuántas están fuera de plazo) o, si lo
   prefieres, todo junto por fecha; la app recuerda la opción. Filtrable por estado y por fuera de plazo.
+- **Seleccionar entregas** («Seleccionar», o la casilla de una asignatura para marcar todas las suyas)
+  y actuar sobre ellas a la vez: **eliminar** (con la opción de enviar sus ficheros a la papelera),
+  **cambiar de asignatura** (pasan a la unidad equivalente de la nueva o, si no la tiene, quedan sin
+  unidad), **cambiar estado**, **añadir etiqueta** y **añadir nota** (esta, con una sola). Escape sale.
 - **Colores según el plazo**: cada entrega cambia de color según se acerca su fecha: verde (más de
   una semana), amarillo (esta semana), naranja (2 o 3 días), rojo anaranjado (hoy o mañana) y rojo
   (fuera de plazo). Lo entregado o corregido queda en gris. La leyenda está en Entregas.

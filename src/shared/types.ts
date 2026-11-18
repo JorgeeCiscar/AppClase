@@ -235,6 +235,15 @@ export interface Api {
     setStatus: (id: number, status: Status | null) => Promise<Item>
     addTag: (id: number, tag: string) => Promise<void>
     removeTag: (id: number, tag: string) => Promise<void>
+    /** Cambia varias entregas a la vez (todo o nada). Devuelve cuántos cambios hubo. */
+    bulkUpdate: (
+      ids: number[],
+      patch: { status?: Status | null; subject_id?: number; addTag?: string; grade?: number | null }
+    ) => Promise<number>
+    bulkRemove: (
+      ids: number[],
+      opts?: { trashFiles?: boolean }
+    ) => Promise<{ removed: number; trashed: number; errors: string[] }>
   }
   files: {
     list: (itemId: number) => Promise<FileRef[]>

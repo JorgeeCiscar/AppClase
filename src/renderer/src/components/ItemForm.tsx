@@ -15,6 +15,8 @@ export default function ItemForm({
   modalTitle,
   header,
   footer,
+  extraActions,
+  cancelLabel = 'Cancelar',
   onSaved,
   onClose
 }: {
@@ -29,6 +31,9 @@ export default function ItemForm({
   /** Contenido extra encima de los campos y debajo de ellos (antes de los botones). */
   header?: ReactNode
   footer?: ReactNode
+  /** Botones extra a la izquierda de «Cancelar» (p. ej. «Saltar esta»). */
+  extraActions?: ReactNode
+  cancelLabel?: string
   /** Puede ser asíncrono: el formulario sigue en «Guardando…» hasta que termina. */
   onSaved: (i: Item) => void | Promise<void>
   onClose: () => void
@@ -188,8 +193,10 @@ export default function ItemForm({
         {footer}
 
         <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onClose}>
-            Cancelar
+          {extraActions}
+          {extraActions && <span className="spacer" />}
+          <button type="button" className="ghost" onClick={onClose} disabled={saving}>
+            {cancelLabel}
           </button>
           <button type="submit" className="primary" disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar'}

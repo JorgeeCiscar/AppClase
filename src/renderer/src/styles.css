@@ -107,6 +107,8 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
 
 .files { display: flex; flex-direction: column; gap: 6px; }
 .file-group + .file-group { margin-top: 14px; }
+.url-list { display: flex; flex-direction: column; gap: 6px; }
+.url-num { width: 20px; text-align: right; flex-shrink: 0; }
 .file-group-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
 .file-row { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .file-row.missing { border-color: var(--bad); }

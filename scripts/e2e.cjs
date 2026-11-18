@@ -343,6 +343,43 @@ function check(name, ok, detail = '') {
     const files2 = await win.evaluate((id) => window.api.files.list(id), imported2.id)
     check('página genérica: descarga el PDF enlazado', files2.length === 1 && files2[0].name === 'practica2.pdf', files2.map((f) => f.name).join(', '))
 
+    // --- Varios enlaces a la vez: se leen y se revisan en el orden en que los pones ---
+    await win.click('button:has-text("Importar desde enlace")')
+    const rows = win.locator('.modal input[name="activity_url"]')
+    // Pegar dos enlaces de golpe en el primer campo los reparte en dos campos.
+    await rows.first().evaluate((el, text) => {
+      const dt = new DataTransfer()
+      dt.setData('text/plain', text)
+      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }))
+    }, `${base}/mod/assign/view.php?id=8\n${base}/actividad-generica.html`)
+    check(
+      'pegar dos enlaces de golpe crea dos campos',
+      (await rows.count()) === 2 && (await rows.nth(1).inputValue()).endsWith('/actividad-generica.html')
+    )
+    await win.click('.modal button:has-text("Añadir otro enlace")')
+    check('«+ Añadir otro enlace» añade un campo más', (await rows.count()) === 3)
+    await rows.nth(2).fill('esto no es un enlace')
+    check('el botón dice cuántas se van a leer', /Leer 3 actividades/.test((await win.locator('.modal button[type="submit"]').textContent()) || ''))
+    await win.screenshot({ path: path.join(S, 'shots', 'varios-enlaces.png') })
+    await win.click('.modal button[type="submit"]')
+
+    await win.waitForSelector('.modal:has-text("Revisa la actividad 1 de 3")', { timeout: 30000 })
+    check('revisa primero la actividad del primer enlace', (await value('.modal input[name="title"]')) === 'Tarea 4: arrays')
+    await win.click('.modal button:has-text("Guardar")')
+    await win.waitForSelector('.modal:has-text("Revisa la actividad 2 de 3")', { timeout: 30000 })
+    check('después, la del segundo', (await value('.modal input[name="title"]')) === 'Práctica 2: formulario accesible')
+    await win.click('.modal button:has-text("Saltar esta")')
+
+    await win.waitForSelector('.modal:has-text("Resultado de la importación")', { timeout: 30000 })
+    const results = await win.locator('.modal [data-result]').evaluateAll((els) => els.map((e) => e.getAttribute('data-result')))
+    check('el resumen recoge cada enlace en orden: guardada, saltada, error', results.join(',') === 'guardada,saltada,error', results.join(','))
+    check('y explica por qué falló el tercero', /no es válido/.test((await win.locator('.modal [data-result="error"]').textContent()) || ''))
+    await win.screenshot({ path: path.join(S, 'shots', 'resumen.png') })
+    await win.click('.modal button:has-text("Cerrar")')
+    const count = (t) => win.evaluate(async (text) => (await window.api.items.list({ text })).length, t)
+    const [n4, n2] = [await count('Tarea 4'), await count('Práctica 2')]
+    check('solo se guarda la que confirmaste, no la saltada', n4 === 2 && n2 === 1, `Tarea 4: ${n4}, Práctica 2: ${n2}`)
+
     // Cerrar sesión y cancelar: la siguiente lectura vuelve a pedir el login, y cerrar la ventana cancela.
     await win.evaluate(() => window.api.importer.logout())
     const relogP = app.waitForEvent('window')

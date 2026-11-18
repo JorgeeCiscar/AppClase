@@ -45,6 +45,11 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
 
 Botón **«Importar desde enlace…»** en el Panel, en cada asignatura y en Entregas.
 
+- Puedes poner **varios enlaces**: «+ Añadir otro enlace» añade campos, y si pegas varios enlaces
+  de golpe en un campo se reparten solos. Se leen uno tras otro **en ese orden**; después revisas
+  cada actividad, también en orden («Revisa la actividad 2 de 5»), y puedes guardarla o saltarla.
+  Al final, un resumen dice qué se guardó, qué saltaste y qué enlaces no se pudieron leer.
+
 - La página se abre en una ventana de la app con **sesión propia y persistente**. Si la
   plataforma pide iniciar sesión, entras con tu usuario en esa ventana y la lectura sigue sola;
   la sesión se recuerda para las siguientes importaciones. «Cerrar sesión de la plataforma»

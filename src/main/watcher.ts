@@ -14,11 +14,20 @@ const MAX_WATCHED_DIRS = 400
 const DEBOUNCE_MS = 350
 /** Además, por si algún cambio no llega (unidades de red, etc.), se repasa todo cada minuto. */
 const SWEEP_MS = 60 * 1000
+/**
+ * Cada poco se comprueba que las carpetas vigiladas sigan existiendo. Hace falta en
+ * Windows: vigilar una carpeta la mantiene abierta, y si la borras queda «pendiente
+ * de borrar» sin que llegue ningún aviso (ni de ella ni de la de arriba) hasta que la
+ * app la suelta. Una carpeta pendiente de borrar ya no cuenta como existente, así que
+ * aquí se detecta, se marca y se deja de vigilar, y Windows termina de borrarla.
+ */
+const EXISTS_MS = 2000
 
 const watchers = new Map<string, FSWatcher>()
 const dirty = new Set<string>()
 let timer: NodeJS.Timeout | null = null
 let sweep: NodeJS.Timeout | null = null
+let existence: NodeJS.Timeout | null = null
 let db: DB | null = null
 
 function notify(): void {
@@ -79,11 +88,15 @@ export function startWatching(database: DB): void {
     if (revalidate(db) > 0) notify()
     syncWatchers()
   }, SWEEP_MS)
+  existence = setInterval(() => {
+    for (const dir of watchers.keys()) if (!existsSync(dir)) onChange(dir)
+  }, EXISTS_MS)
 }
 
 export function stopWatching(): void {
   if (timer) clearTimeout(timer)
   if (sweep) clearInterval(sweep)
+  if (existence) clearInterval(existence)
   for (const w of watchers.values()) w.close()
   watchers.clear()
   db = null

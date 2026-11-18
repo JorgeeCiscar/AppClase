@@ -54,7 +54,12 @@ function check(name, ok, detail = '') {
     const app = await _electron.launch({
       executablePath: require('electron'),
       args: [ROOT, '--no-sandbox'],
-      env: { ...process.env, APPCLASE_DATA_DIR: path.join(S, 'data'), APPCLASE_DEBUG_WATCH: '1' }
+      env: {
+        ...process.env,
+        APPCLASE_DATA_DIR: path.join(S, 'data'),
+        APPCLASE_CONFIG_DIR: path.join(S, 'config'),
+        APPCLASE_DEBUG_WATCH: '1'
+      }
     })
     const errors = []
     const mainLog = []

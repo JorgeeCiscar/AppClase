@@ -10,6 +10,7 @@ import {
   addPaths, chooseFiles, chooseFolder, openFile, openWith, relocate, removeItem, revalidate, reveal, searchContent
 } from './files'
 import { cancelRead, downloadFiles, logoutPlatform, readActivity, readCourse } from './importer'
+import { backup } from './sync'
 import { syncWatchers } from './watcher'
 import { findUnit } from '../shared/match'
 
@@ -450,6 +451,7 @@ export function registerIpc(db: DB): void {
         let removed = 0
         const errors: string[] = []
         const dir = getSettings(db).downloads_dir
+        backup('antes-de-borrar')
         for (const id of cleanIds(ids)) {
           const r = await removeItem(db, id, opts?.trashFiles === true, dir)
           trashed += r.trashed

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { Opener, Settings } from '../../../shared/types'
+import type { Opener, Settings, SyncStatus } from '../../../shared/types'
+import { errorMessage } from '../util'
+import Modal from './Modal'
 import { describeUpdate, useUpdateStatus } from './UpdateBanner'
 
 /**
@@ -17,11 +19,28 @@ export default function SettingsView({
   const [settings, setSettings] = useState<Settings | undefined>()
   const [version, setVersion] = useState('')
   const update = useUpdateStatus()
+  const [sync, setSync] = useState<SyncStatus | undefined>()
+  /** Diálogo: 'subir' (activar con estos datos), 'adoptar' (usar los de OneDrive) o 'desactivar'. */
+  const [syncDialog, setSyncDialog] = useState<null | 'subir' | 'adoptar' | 'desactivar'>(null)
+  const [syncBusy, setSyncBusy] = useState(false)
 
   useEffect(() => {
     void window.api.settings.get().then(setSettings)
     void window.api.app.version().then(setVersion)
+    void window.api.sync.status().then(setSync)
   }, [])
+
+  const syncAction = async (fn: () => Promise<void>): Promise<void> => {
+    setSyncBusy(true)
+    try {
+      await fn() // la app se reinicia
+    } catch (err) {
+      onToast(errorMessage(err), true)
+      setSyncBusy(false)
+      setSyncDialog(null)
+      void window.api.sync.status().then(setSync)
+    }
+  }
 
   if (!settings) return <div className="page" />
 
@@ -54,8 +73,8 @@ export default function SettingsView({
 
       <h2>Plataforma del curso</h2>
       <p className="muted small" style={{ maxWidth: 620 }}>
-        Al importar una actividad desde un enlace, sus ficheros se descargan en esta carpeta, dentro de una
-        subcarpeta por asignatura y actividad.
+        Al importar una actividad desde un enlace, sus ficheros se descargan en esta carpeta, dentro de una subcarpeta
+        por asignatura y actividad.
       </p>
       <div className="row" style={{ maxWidth: 620 }}>
         <input readOnly value={settings.downloads_dir} style={{ flex: 1 }} title={settings.downloads_dir} />
@@ -88,14 +107,24 @@ export default function SettingsView({
       <div className="list">
         {settings.openers.map((o, idx) => (
           <div key={idx} className="list-row">
-            <input placeholder="Nombre (VS Code)" value={o.name} onChange={(e) => setOpener(idx, { name: e.target.value })} style={{ width: 150 }} />
+            <input
+              placeholder="Nombre (VS Code)"
+              value={o.name}
+              onChange={(e) => setOpener(idx, { name: e.target.value })}
+              style={{ width: 150 }}
+            />
             <input
               placeholder="Ruta del programa"
               value={o.command}
               onChange={(e) => setOpener(idx, { command: e.target.value })}
               style={{ flex: 1, minWidth: 180 }}
             />
-            <input placeholder="Argumentos" value={o.args ?? ''} onChange={(e) => setOpener(idx, { args: e.target.value })} style={{ width: 120 }} />
+            <input
+              placeholder="Argumentos"
+              value={o.args ?? ''}
+              onChange={(e) => setOpener(idx, { args: e.target.value })}
+              style={{ width: 120 }}
+            />
             <button
               className="tiny"
               onClick={async () => {
@@ -119,7 +148,11 @@ export default function SettingsView({
       </div>
 
       <div className="row" style={{ marginTop: 12 }}>
-        <button onClick={() => setSettings({ ...settings, openers: [...settings.openers, { name: '', command: '', args: '' }] })}>
+        <button
+          onClick={() =>
+            setSettings({ ...settings, openers: [...settings.openers, { name: '', command: '', args: '' }] })
+          }
+        >
           Añadir programa
         </button>
       </div>
@@ -145,6 +178,124 @@ export default function SettingsView({
           </button>
         )}
       </div>
+
+      <h2>Sincronizar entre ordenadores</h2>
+      {sync && (
+        <div className="sync-box" data-sync={sync.enabled ? 'on' : 'off'}>
+          {sync.enabled ? (
+            <>
+              <p>
+                <strong className="sync-on">● Activada.</strong> Los datos están en OneDrive y se comparten con tus
+                otros ordenadores.
+              </p>
+              <p className="muted small">
+                Carpeta: <code>{sync.dataDir}</code>
+              </p>
+              <p className="muted small">
+                Abre AppClase en un solo ordenador a la vez: si la abres en otro, te avisará. Antes de cambiar de
+                ordenador, ciérrala y deja que OneDrive termine de sincronizar. Las copias de seguridad automáticas (las
+                10 últimas) están en <code>{sync.backupsDir}</code>.
+              </p>
+              <p className="muted small">
+                Los ficheros que estén fuera de OneDrive solo existen en el ordenador donde los añadiste: en los demás
+                salen como «no se encuentra», pero no se quitan.
+              </p>
+              <div className="row-wrap">
+                <button name="sync_disable" onClick={() => setSyncDialog('desactivar')}>
+                  Desactivar en este ordenador
+                </button>
+              </div>
+            </>
+          ) : sync.oneDrive ? (
+            <>
+              {sync.noOneDrive && (
+                <p className="bad small">
+                  La sincronización estaba activada, pero al abrir no se encontró OneDrive: estás usando los datos de
+                  este ordenador.
+                </p>
+              )}
+              <p className="muted small" style={{ maxWidth: 620 }}>
+                Guarda los datos de AppClase (asignaturas, entregas, notas e índice de ficheros) en tu OneDrive para
+                tenerlos en todos tus ordenadores. Actívalo en cada uno.
+                <br />
+                OneDrive de este ordenador: <code>{sync.oneDrive}</code>
+              </p>
+              {sync.cloudHasData ? (
+                <>
+                  <p className="small">
+                    Ya hay datos de AppClase en OneDrive
+                    {sync.otherHost ? ` (ahora abiertos en «${sync.otherHost}»)` : ''}.
+                  </p>
+                  <div className="row-wrap">
+                    <button name="sync_adopt" className="primary" onClick={() => setSyncDialog('adoptar')}>
+                      Usar los datos de OneDrive
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="row-wrap">
+                  <button name="sync_enable" className="primary" onClick={() => setSyncDialog('subir')}>
+                    Activar sincronización
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="muted small" style={{ maxWidth: 620 }}>
+              No se encuentra OneDrive en este ordenador. Instálalo e inicia sesión para poder sincronizar los datos
+              entre ordenadores.
+            </p>
+          )}
+        </div>
+      )}
+
+      {syncDialog && (
+        <Modal
+          title={
+            syncDialog === 'subir'
+              ? '¿Activar la sincronización?'
+              : syncDialog === 'adoptar'
+                ? '¿Usar los datos de OneDrive?'
+                : '¿Desactivar la sincronización?'
+          }
+          onClose={() => !syncBusy && setSyncDialog(null)}
+        >
+          <div className="form">
+            {syncDialog === 'subir' && <p>Tus datos se copiarán a OneDrive y AppClase se reiniciará usándolos.</p>}
+            {syncDialog === 'adoptar' && (
+              <p>
+                AppClase se reiniciará con los datos que hay en OneDrive (los de tu otro ordenador). Los datos que
+                tenías en este ordenador no se borran: se quedan guardados aparte, pero dejarás de verlos.
+              </p>
+            )}
+            {syncDialog === 'desactivar' && (
+              <p>
+                Se copiará a este ordenador lo que hay ahora en OneDrive y AppClase se reiniciará usando esa copia. Los
+                cambios que hagas aquí ya no llegarán a tus otros ordenadores.
+              </p>
+            )}
+            <div className="modal-actions">
+              <button className="ghost" disabled={syncBusy} onClick={() => setSyncDialog(null)}>
+                Cancelar
+              </button>
+              <button
+                name="sync_confirm"
+                className="primary"
+                disabled={syncBusy}
+                onClick={() =>
+                  void syncAction(() =>
+                    syncDialog === 'desactivar'
+                      ? window.api.sync.disable()
+                      : window.api.sync.enable({ adopt: syncDialog === 'adoptar' })
+                  )
+                }
+              >
+                {syncBusy ? 'Reiniciando…' : 'Aceptar y reiniciar'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <h2>Mantenimiento</h2>
       <div className="row-wrap">

@@ -204,6 +204,7 @@ export default function CourseImport({
     stopRef.current = false
     setResults(Object.fromEntries(queue.map((r) => [r.key, { state: 'espera' } as Result])))
     setStep('importando')
+    await window.api.sync.backup('antes-de-importar').catch(() => {})
     let done = 0
     for (const r of queue) {
       if (stopRef.current) break

@@ -58,6 +58,12 @@ const api: Api = {
     download: invoke('importer:download'),
     logout: invoke('importer:logout')
   },
+  sync: {
+    status: invoke('sync:status'),
+    enable: invoke('sync:enable'),
+    disable: invoke('sync:disable'),
+    backup: invoke('sync:backup')
+  },
   app: {
     version: invoke('app:version'),
     // Electron 32 quitó File.path: la ruta de un fichero soltado se obtiene así.

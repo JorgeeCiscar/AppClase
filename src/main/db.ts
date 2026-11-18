@@ -117,9 +117,13 @@ export function seedSubjects(db: DB): void {
   DAW1_SUBJECTS.forEach((s, i) => insert.run(s.name, s.short_name, s.color, i))
 }
 
-export function openDatabase(file: string): DB {
+/**
+ * journal 'DELETE' cuando el fichero está en OneDrive: así todo queda en un único
+ * fichero (sin -wal aparte que pueda sincronizarse a destiempo).
+ */
+export function openDatabase(file: string, journal: 'WAL' | 'DELETE' = 'WAL'): DB {
   const db = new DatabaseSync(file)
-  db.exec('PRAGMA journal_mode = WAL')
+  db.exec(`PRAGMA journal_mode = ${journal}`)
   db.exec('PRAGMA foreign_keys = ON')
   const current = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
   for (let v = current; v < MIGRATIONS.length; v++) {

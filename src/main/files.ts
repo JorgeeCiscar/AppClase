@@ -154,6 +154,17 @@ function findRenamed(db: DB, f: FileState, dir: string): string | null {
  *   «no se encuentra», sin quitarlo, para poder volver a localizarlo.
  * Devuelve cuántos ficheros cambiaron.
  */
+/**
+ * Con los datos sincronizados por OneDrive, carpeta de OneDrive de este ordenador.
+ * Un fichero de fuera de ella puede existir solo en el otro ordenador: nunca se quita
+ * del índice desde aquí, solo se marca como «no se encuentra».
+ */
+let syncRoot: string | null = null
+export const setSyncRoot = (root: string | null): void => {
+  syncRoot = root
+}
+const onlyMark = (p: string): boolean => syncRoot !== null && !isInside(syncRoot, p)
+
 export function reconcile(db: DB, rows: FileState[]): number {
   let changed = 0
   transaction(db, () => {
@@ -177,7 +188,7 @@ export function reconcile(db: DB, rows: FileState[]): number {
         continue
       }
       const dir = dirname(f.path)
-      if (!existsSync(dir)) {
+      if (!existsSync(dir) || onlyMark(f.path)) {
         if (!f.missing) {
           markMissing.run(f.id)
           changed++

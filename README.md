@@ -61,6 +61,7 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
 - **Importar una actividad desde su enlace** (Aules, Moodle u otra web): se leen el título,
   la asignatura, la fecha de entrega, el enunciado y los adjuntos; se crea el elemento como
   entrega pendiente y los ficheros se descargan a la carpeta del curso y se indexan.
+- **Sincronizar entre ordenadores con OneDrive** (Ajustes → «Sincronizar entre ordenadores»): ver abajo.
 - **Actualizaciones automáticas** desde GitHub Releases, con botón «Buscar actualizaciones»
   en Ajustes y aviso en la barra lateral cuando hay una versión nueva descargada.
 
@@ -111,6 +112,28 @@ Botón **«Importar desde enlace…»** en el Panel, en cada asignatura y en Ent
   `Documentos/AppClase`, configurable en Ajustes). En la ficha del elemento se ven agrupados por
   apartado; los que añadas a mano aparecen en «Otros ficheros».
 
+## Sincronizar entre ordenadores (OneDrive)
+
+En **Ajustes → Sincronizar entre ordenadores**, en cada ordenador:
+
+- En el primero, **«Activar sincronización»** copia los datos a `OneDrive\AppClase\datos\appclase.db` y
+  reinicia la app usándolos. En los demás, la app ve que ya hay datos y ofrece **«Usar los datos de
+  OneDrive»** (los que tuviera ese ordenador se quedan guardados en su carpeta local).
+- **Un ordenador a la vez**: mientras está abierta, la app deja una marca `appclase.lock` (con el nombre
+  del ordenador) que renueva cada minuto. Si al abrir la marca es de otro ordenador y está viva, avisa
+  (Reintentar / Abrir igualmente / Salir). Si un ordenador ve que otro ha tomado el relevo, se cierra sin
+  escribir más. Una marca sin renovar en 3 minutos se considera abandonada.
+- **Rutas**: OneDrive puede estar en otra ruta en cada ordenador; al abrir, las rutas de los ficheros que
+  están dentro de OneDrive (y la carpeta de descargas) se pasan al OneDrive de ese ordenador. Los ficheros
+  **fuera de OneDrive** solo existen donde se añadieron: en los demás salen como «no se encuentra», pero
+  nunca se quitan del índice.
+- **Copias de seguridad** en `OneDrive\AppClase\datos\copias`: al abrir, antes de borrar varias entregas y
+  antes de importar una asignatura (como mucho una cada 10 minutos). Se guardan las 10 últimas.
+- **«Desactivar en este ordenador»** copia a este ordenador lo que hay en OneDrive (los datos locales
+  anteriores se apartan como `appclase-antes-<fecha>.db`) y vuelve a usar datos locales.
+- Con los datos en OneDrive, SQLite usa `journal_mode = DELETE` para que todo quede en un único fichero.
+- Solo puede haber una ventana de AppClase abierta en cada ordenador.
+
 ## Desarrollo
 
 ```bash
@@ -121,6 +144,9 @@ npm run test:e2e     # prueba de extremo a extremo con Playwright
 npm run dist:win     # genera dist/AppClase-Setup-<versión>.exe
 ```
 
+- `test:e2e` ejecuta también `scripts/e2e-sync.cjs`, que simula dos ordenadores con su propio OneDrive
+  (variables `APPCLASE_CONFIG_DIR`, `APPCLASE_ONEDRIVE`, `APPCLASE_HOST`, `APPCLASE_TEST`) y comprueba
+  el módulo `syncCore` por separado.
 - En Linux sin pantalla: `xvfb-run -a npm run test:e2e`. `KEEP_E2E=1` conserva el
   directorio temporal con la base de datos y las capturas.
 - `scripts/demo.cjs <carpeta>` siembra datos de ejemplo y guarda capturas de la app.
@@ -154,6 +180,8 @@ src/
     ipc.ts      handlers de asignaturas, temas, elementos, ficheros, búsqueda y ajustes
     updater.ts  actualizaciones automáticas desde GitHub Releases
     importer.ts leer una actividad desde su enlace y descargar sus ficheros con la sesión
+    sync.ts     datos en OneDrive: abrir, marca «en uso», copias, activar y desactivar
+    syncCore.ts lo anterior sin Electron (configuración, marca, rutas y copias), probado aparte
   preload/    puente seguro (contextBridge) → window.api
   renderer/   interfaz en React
   shared/     tipos compartidos entre procesos
@@ -164,7 +192,8 @@ build/        recursos del instalador (icono)
 ## Datos
 
 La base de datos se guarda en la carpeta de datos de usuario de Electron
-(`%APPDATA%/AppClase/datos/appclase.db` en Windows). Se puede cambiar con la variable
+(`%APPDATA%/AppClase/datos/appclase.db` en Windows), o en OneDrive si la sincronización está activada.
+Se puede cambiar con la variable
 de entorno `APPCLASE_DATA_DIR`, que es lo que usa la prueba E2E.
 
 Borrar un elemento o una asignatura **no borra ningún fichero del disco**: solo se

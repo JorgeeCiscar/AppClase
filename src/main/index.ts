@@ -1,12 +1,24 @@
 import { app, BrowserWindow, shell } from 'electron'
-import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { openDatabase } from './db'
+import type { DB } from './db'
 import { registerIpc } from './ipc'
+import { closeData, openData, registerSyncIpc } from './sync'
 import { setupUpdater } from './updater'
 import { startWatching, stopWatching } from './watcher'
 
-const dataDir = process.env.APPCLASE_DATA_DIR ?? join(app.getPath('userData'), 'datos')
+// Las pruebas usan su propia carpeta de usuario (y así pueden simular dos ordenadores).
+if (process.env.APPCLASE_CONFIG_DIR) app.setPath('userData', process.env.APPCLASE_CONFIG_DIR)
+
+// Una sola ventana de AppClase: abrirla otra vez lleva a la que ya está abierta.
+if (!app.requestSingleInstanceLock()) app.quit()
+else
+  app.on('second-instance', () => {
+    const w = BrowserWindow.getAllWindows()[0]
+    if (w) {
+      if (w.isMinimized()) w.restore()
+      w.focus()
+    }
+  })
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -34,17 +46,27 @@ function createWindow(): void {
   else win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-app.whenReady().then(() => {
-  mkdirSync(dataDir, { recursive: true })
-  const db = openDatabase(join(dataDir, 'appclase.db'))
+app.whenReady().then(async () => {
+  let db: DB | null = null
+  /** Deja de vigilar y cierra la base de datos (una sola vez). */
+  let closed = false
+  const cleanup = (): void => {
+    if (closed) return
+    closed = true
+    stopWatching()
+    db?.close()
+  }
+  db = await openData(cleanup)
+  if (!db) return app.exit(0)
   registerIpc(db)
+  registerSyncIpc()
   startWatching(db)
   setupUpdater()
   createWindow()
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow())
   app.on('will-quit', () => {
-    stopWatching()
-    db.close()
+    closeData()
+    cleanup()
   })
 })
 

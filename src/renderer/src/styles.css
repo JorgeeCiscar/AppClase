@@ -73,6 +73,11 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
 @media (max-width: 1100px) { .brand-sub { display: none; } .sidebar nav { margin-left: 4px; } }
 .update-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; max-width: 620px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.sync-box { max-width: 620px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 14px 12px; }
+.sync-box p { margin: 10px 0; }
+.sync-box code { word-break: break-all; }
+.sync-on { color: var(--ok); }
+.sync-box .bad { color: var(--bad); }
 .content { flex: 1; overflow: auto; min-width: 0; min-height: 0; }
 
 .page { padding: 22px 26px 60px; }

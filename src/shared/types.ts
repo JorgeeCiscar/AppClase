@@ -294,6 +294,15 @@ export interface Api {
     /** Borra la sesión guardada de la plataforma. */
     logout: () => Promise<void>
   }
+  sync: {
+    status: () => Promise<SyncStatus>
+    /** Activa la sincronización; adopt: usar los datos que ya hay en OneDrive. La app se reinicia. */
+    enable: (opts?: { adopt?: boolean }) => Promise<void>
+    /** Desactiva la sincronización: los datos de OneDrive pasan a este ordenador. La app se reinicia. */
+    disable: () => Promise<void>
+    /** Copia de seguridad antes de algo delicado (como mucho una cada 10 minutos). */
+    backup: (reason: string) => Promise<void>
+  }
   app: {
     version: () => Promise<string>
     pathForFile: (file: File) => string
@@ -311,4 +320,22 @@ export interface UpdateStatus {
   message?: string
   /** Cuándo terminó la última comprobación (ISO), para que cada pulsación se note. */
   checkedAt?: string
+}
+
+/** Estado de la sincronización de los datos entre ordenadores (OneDrive). */
+export interface SyncStatus {
+  /** Los datos que hay abiertos están en OneDrive. */
+  enabled: boolean
+  /** Está activada pero OneDrive no está en este ordenador: se usan los datos locales. */
+  noOneDrive: boolean
+  /** Carpeta de OneDrive de este ordenador, si se encuentra. */
+  oneDrive: string | null
+  /** Carpeta de los datos que hay abiertos. */
+  dataDir: string
+  /** Ya hay datos de AppClase en OneDrive (de otro ordenador). */
+  cloudHasData: boolean
+  host: string
+  /** Otro ordenador que tiene la marca «en uso». */
+  otherHost: string | null
+  backupsDir: string | null
 }

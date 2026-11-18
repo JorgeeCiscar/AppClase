@@ -1,7 +1,7 @@
 import { BrowserWindow, session } from 'electron'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
-import type { ActivityFile, DownloadResult, FileSection, ScrapedActivity, Status } from '../shared/types'
+import type { ActivityFile, DownloadResult, FileSection, ScrapedActivity, ScrapedCourse, Status } from '../shared/types'
 import { parseUnit } from '../shared/match'
 import { FILE_SECTION_LABEL } from '../shared/types'
 import type { DB } from './db'
@@ -103,6 +103,10 @@ const EXTRACT = String.raw`(() => {
     hide.forEach((el) => { el.style.display = 'none'; });
     description = txt(header);
     hide.forEach((el, i) => { el.style.display = prev[i]; });
+    // En las «páginas» y «libros» de Moodle el texto va fuera de la cabecera.
+    if (!description && body && /\bpath-mod-(page|book)\b/.test(body.className)) {
+      description = txt(q('#region-main .box.generalbox') || q('#region-main [role="main"]') || root).slice(0, 8000);
+    }
   } else {
     const descEl = q('.activity-description') || q('#intro') || q('.box.generalbox');
     description = txt(descEl) || txt(root).slice(0, 4000);
@@ -145,6 +149,51 @@ const EXTRACT = String.raw`(() => {
     title: title.slice(0, 300), course: course.slice(0, 300), section: section.slice(0, 300),
     description: description.slice(0, 8000), lines, statusLines, files
   };
+})()`
+
+/**
+ * Se ejecuta DENTRO de la página de una asignatura (curso de Moodle): devuelve el
+ * nombre del curso y sus secciones (unidades) con las actividades de cada una.
+ */
+const COURSE_EXTRACT = String.raw`(() => {
+  const q = (sel) => document.querySelector(sel);
+  const clean = (el) => {
+    if (!el) return '';
+    const c = el.cloneNode(true);
+    c.querySelectorAll('.accesshide, .sr-only, .visually-hidden').forEach((x) => x.remove());
+    return String(c.textContent || '').replace(/\s+/g, ' ').trim();
+  };
+  const visiblePassword = Array.from(document.querySelectorAll('input[type="password"]')).some((i) => i.offsetParent !== null);
+  const isLogin = visiblePassword || /\/login\//i.test(location.pathname);
+  const course = clean(q('.page-header-headings h1')) || clean(q('#page-header h1')) || String(document.title || '').split(/[:|]/)[0].trim();
+
+  const seen = new Set();
+  const add = (list, a, li) => {
+    const href = String(a.href || '').split('#')[0];
+    const m = /\/mod\/([a-z0-9_]+)\/view\.php\?(?:[^#]*&)?id=\d+/.exec(href);
+    if (!m || seen.has(href)) return;
+    seen.add(href);
+    const typed = /\bmodtype_([a-z0-9_]+)/.exec((li && li.className) || '');
+    const name = clean(a.querySelector('.instancename')) || clean(a);
+    list.push({ name: name.slice(0, 200), url: href, modtype: typed ? typed[1] : m[1] });
+  };
+  const sections = [];
+  for (const sec of Array.from(document.querySelectorAll('li.section, li.course-section, [data-for="section"]'))) {
+    const title = clean(sec.querySelector('.sectionname, [data-for="section_title"], h3, h4'));
+    const acts = [];
+    for (const li of Array.from(sec.querySelectorAll('li.activity, [data-for="cmitem"]'))) {
+      const a = li.querySelector('a[href*="/mod/"]');
+      if (a) add(acts, a, li);
+    }
+    if (acts.length) sections.push({ title: title.slice(0, 200), activities: acts });
+  }
+  // Otras plantillas: todos los enlaces a actividades del contenido, en una sola sección.
+  if (!sections.length) {
+    const acts = [];
+    for (const a of Array.from((q('#region-main') || document.body).querySelectorAll('a[href*="/mod/"]'))) add(acts, a, a.closest('li'));
+    if (acts.length) sections.push({ title: '', activities: acts });
+  }
+  return { isLogin, url: location.href, course: course.slice(0, 300), sections };
 })()`
 
 interface RawPage {
@@ -240,7 +289,7 @@ export function parseDate(text: string): string | null {
 const DUE_LABELS = [
   'fecha de entrega', 'fecha limite', 'fecha de vencimiento', 'data de lliurament', 'data limit',
   'due date', 'vencimiento', 'venciment', 'pendiente', 'vence', 'venc', 'due',
-  'cierre', 'se cierra', 'tancament', 'es tanca', 'closes', 'close'
+  'cierre', 'se cierra', 'cierra', 'tancament', 'es tanca', 'tanca', 'closes', 'close'
 ]
 
 /**
@@ -356,11 +405,12 @@ function buildActivity(p: RawPage): ScrapedActivity {
 }
 
 /**
- * Abre la página en una ventana con la sesión de la plataforma. Si la página pide
- * iniciar sesión, la ventana se muestra para que entres con tu usuario; cuando
- * vuelve a la actividad, se lee sola y la ventana se cierra.
+ * Abre una página en una ventana con la sesión de la plataforma y ejecuta en ella un
+ * script de lectura. Si la página pide iniciar sesión, la ventana se muestra para que
+ * entres con tu usuario; cuando vuelve a la página pedida, se lee sola y se cierra.
+ * El script debe devolver un objeto con «isLogin» y «url».
  */
-export function readActivity(rawUrl: string): Promise<ScrapedActivity> {
+function readPage(rawUrl: string, script: string): Promise<Record<string, unknown>> {
   let target: URL
   try {
     target = new URL(String(rawUrl ?? '').trim())
@@ -372,7 +422,7 @@ export function readActivity(rawUrl: string): Promise<ScrapedActivity> {
   }
   if (current && !current.isDestroyed()) current.destroy()
 
-  return new Promise<ScrapedActivity>((resolve, reject) => {
+  return new Promise<Record<string, unknown>>((resolve, reject) => {
     const win = new BrowserWindow({
       width: 1000,
       height: 760,
@@ -391,7 +441,7 @@ export function readActivity(rawUrl: string): Promise<ScrapedActivity> {
     let sawLogin = false
     let retried = false
 
-    const finish = (err: Error | null, value?: ScrapedActivity): void => {
+    const finish = (err: Error | null, value?: Record<string, unknown>): void => {
       if (done) return
       done = true
       clearTimeout(showTimer)
@@ -399,7 +449,7 @@ export function readActivity(rawUrl: string): Promise<ScrapedActivity> {
       if (current === win) current = null
       if (!win.isDestroyed()) win.destroy()
       if (err) reject(err)
-      else resolve(value as ScrapedActivity)
+      else resolve(value as Record<string, unknown>)
     }
 
     // Nada de ventanas emergentes desde la página.
@@ -413,13 +463,13 @@ export function readActivity(rawUrl: string): Promise<ScrapedActivity> {
       if (done || win.isDestroyed()) return
       let raw: unknown
       try {
-        raw = await win.webContents.executeJavaScript(EXTRACT, false)
+        raw = await win.webContents.executeJavaScript(script, false)
       } catch {
         return // la página cambió mientras se leía; llegará otro did-finish-load
       }
       if (done) return
-      const page = sanitizeRaw(raw)
-      if (page.isLogin) {
+      const page = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+      if (page.isLogin === true) {
         sawLogin = true
         if (!win.isVisible()) {
           win.setTitle('Inicia sesión en la plataforma — AppClase')
@@ -429,12 +479,12 @@ export function readActivity(rawUrl: string): Promise<ScrapedActivity> {
         return
       }
       // Tras iniciar sesión algunas plataformas te dejan en la portada, no en la actividad.
-      if (sawLogin && !sameUrl(page.url, target.href) && !retried) {
+      if (sawLogin && !sameUrl(str(page.url, 2000), target.href) && !retried) {
         retried = true
         void win.loadURL(target.href).catch(() => {})
         return
       }
-      finish(null, buildActivity(page))
+      finish(null, page)
     })
 
     // Si tarda (redirecciones de inicio de sesión raras, avisos…), se enseña la ventana.
@@ -445,6 +495,28 @@ export function readActivity(rawUrl: string): Promise<ScrapedActivity> {
 
     void win.loadURL(target.href).catch(() => {}) // los errores llegan por did-fail-load
   })
+}
+
+/** Lee la página de una asignatura: su nombre y sus secciones con las actividades. */
+export async function readCourse(rawUrl: string): Promise<ScrapedCourse> {
+  const r = await readPage(rawUrl, COURSE_EXTRACT)
+  const sections = (Array.isArray(r.sections) ? r.sections : []).slice(0, 100).map((sec) => {
+    const x = (sec && typeof sec === 'object' ? sec : {}) as Record<string, unknown>
+    const acts = (Array.isArray(x.activities) ? x.activities : []).slice(0, 300).map((a) => {
+      const y = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>
+      return { name: str(y.name, 200).trim() || 'Actividad', url: str(y.url, 2000), modtype: str(y.modtype, 40).toLowerCase() }
+    })
+    return {
+      title: str(x.title, 200).trim(),
+      activities: acts.filter((a) => /^https?:\/\//i.test(a.url) && /^[a-z0-9_]+$/.test(a.modtype))
+    }
+  })
+  return { url: str(r.url, 2000), course: str(r.course, 300).trim(), sections: sections.filter((s) => s.activities.length) }
+}
+
+/** Lee una actividad: título, curso, fechas, estado, unidad, enunciado y ficheros. */
+export async function readActivity(rawUrl: string): Promise<ScrapedActivity> {
+  return buildActivity(sanitizeRaw(await readPage(rawUrl, EXTRACT)))
 }
 
 export function cancelRead(): void {

@@ -150,6 +150,80 @@ const GENERIC = page(
    </main>`
 )
 
+// Una ASIGNATURA ENTERA (página del curso, como en Aules con el formato «Temas»):
+// sección General con un foro (se ignora) y la programación; unidades con tareas,
+// ficheros, un enlace, una carpeta, un cuestionario y una página. Las tareas 7 y 8
+// ya estarán importadas cuando se lea.
+const act = (mod, id, name, kind) =>
+  `<li class="activity ${mod} modtype_${mod}"><a class="aalink" href="/mod/${mod}/view.php?id=${id}">` +
+  `<span class="instancename">${name}<span class="accesshide"> ${kind}</span></span></a></li>`
+const section = (n, title, items) =>
+  `<li class="section course-section" id="section-${n}" data-for="section">` +
+  `<h3 class="sectionname" data-for="section_title">${title}</h3><ul class="section">${items.join('')}</ul></li>`
+const COURSE = page(
+  'Curs: Programació (1r DAW)',
+  'path-course-view pagelayout-course',
+  `<div id="page-header"><div class="page-header-headings"><h1>Programació (1r DAW)</h1></div></div>
+   <div id="region-main"><ul class="topics">
+     ${section(0, 'General', [act('forum', 1, 'Avisos', 'Fòrum'), act('resource', 19, 'Programació didàctica', 'Fitxer')])}
+     ${section(1, 'Unitat 1: Estructures de control', [
+       act('assign', 7, 'Tasca 3: bucles', 'Tasca'),
+       act('resource', 20, 'Apunts tema 1', 'Fitxer'),
+       act('url', 21, 'Documentació Java', 'URL'),
+       act('folder', 22, 'Exercicis resolts', 'Carpeta'),
+       '<li class="activity label modtype_label"><div class="contentwithoutlink">Llegiu els apunts abans de la tasca.</div></li>'
+     ])}
+     ${section(3, 'UD 3 - Arrays', [
+       act('assign', 8, 'Tarea 4: arrays', 'Tasca'),
+       act('quiz', 30, "Qüestionari d'arrays", 'Qüestionari'),
+       act('page', 31, "Resum d'arrays", 'Pàgina')
+     ])}
+     ${section(5, 'Unitat 5: Fitxers', [act('assign', 32, 'Tasca 6: fitxers', 'Tasca')])}
+   </ul></div>`
+)
+
+const QUIZ = page(
+  "Programació (1r DAW): Qüestionari d'arrays",
+  'path-mod-quiz pagelayout-incourse',
+  `<div id="page-header"><div class="page-header-headings"><h1>Qüestionari d'arrays</h1></div></div>
+   <div id="region-main"><div class="activity-header" data-for="page-activity-header">
+     <div data-region="activity-dates" class="activity-dates">
+       <div><strong>Obert:</strong> dilluns, 16 de novembre de 2026, 08:00</div>
+       <div><strong>Tanca:</strong> divendres, 11 de desembre de 2026, 23:59</div>
+     </div>
+     <div class="activity-description" id="intro"><p>Qüestionari de 10 preguntes sobre arrays.</p></div>
+   </div></div>`
+)
+
+const PAGE = page(
+  "Programació (1r DAW): Resum d'arrays",
+  'path-mod-page pagelayout-incourse',
+  `<div id="page-header"><div class="page-header-headings"><h1>Resum d'arrays</h1></div></div>
+   <div id="region-main">
+     <div class="activity-header" data-for="page-activity-header"></div>
+     <div role="main"><div class="box generalbox"><p>Un array és una col·lecció d'elements del mateix tipus.</p></div></div>
+   </div>`
+)
+
+const ASSIGN6 = page(
+  'Programació (1r DAW): Tasca 6: fitxers',
+  'path-mod-assign pagelayout-incourse',
+  `<nav><ol class="breadcrumb"><li><a href="/course/view.php?id=55">Programació (1r DAW)</a></li>
+     <li><a href="/course/section.php?id=205">Unitat 5: Fitxers</a></li></ol></nav>
+   <div id="page-header"><div class="page-header-headings"><h1>Tasca 6: fitxers</h1></div></div>
+   <div id="region-main">
+     <div class="activity-header" data-for="page-activity-header">
+       <div data-region="activity-dates" class="activity-dates">
+         <div><strong>Venciment:</strong> dimecres, 16 de desembre de 2026, 23:59</div>
+       </div>
+       <div class="activity-description" id="intro"><p>Llegiu un fitxer de text i compteu les línies.</p></div>
+     </div>
+     <table class="generaltable submissionstatustable">
+       <tr><th>Estat de la tramesa</th><td>No s'ha fet cap intent</td></tr>
+     </table>
+   </div>`
+)
+
 function startFakePlatform() {
   const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://localhost')
@@ -174,7 +248,28 @@ function startFakePlatform() {
     if (u.pathname === '/mod/assign/view.php') {
       if (!logged) return toLogin()
       const id = u.searchParams.get('id')
-      return send(200, html, id === '8' ? ASSIGN_TEXT : id === '9' ? ASSIGN_DRAFT : ASSIGN)
+      return send(200, html, id === '8' ? ASSIGN_TEXT : id === '9' ? ASSIGN_DRAFT : id === '32' ? ASSIGN6 : ASSIGN)
+    }
+    // Asignatura entera y sus actividades.
+    if (u.pathname === '/course/view.php') return logged ? send(200, html, COURSE) : toLogin()
+    if (u.pathname === '/mod/quiz/view.php') return logged ? send(200, html, QUIZ) : toLogin()
+    if (u.pathname === '/mod/page/view.php') return logged ? send(200, html, PAGE) : toLogin()
+    if (u.pathname === '/mod/url/view.php') return logged ? send(200, html, page('URL', '', '<a href="https://docs.oracle.com/">Java</a>')) : toLogin()
+    if (u.pathname === '/mod/resource/view.php') {
+      if (!logged) return toLogin()
+      const name = u.searchParams.get('id') === '19' ? 'programacio-didactica.pdf' : 'apunts-tema1.pdf'
+      // Con redirect=1, Moodle redirige directamente al fichero.
+      if (u.searchParams.get('redirect') === '1') {
+        res.writeHead(303, { Location: `/pluginfile.php/500/mod_resource/content/1/${name}` })
+        return res.end()
+      }
+      return send(200, html, page('Fitxer', 'path-mod-resource', `<a href="/pluginfile.php/500/mod_resource/content/1/${name}">${name}</a>`))
+    }
+    if (u.pathname === '/mod/folder/download_folder.php') {
+      if (!logged) return toLogin()
+      return send(200, 'application/zip', 'PK\u0003\u0004 carpeta comprimida de prova', {
+        'Content-Disposition': 'attachment; filename="Exercicis resolts.zip"'
+      })
     }
     if (u.pathname.startsWith('/pluginfile.php/')) {
       if (!logged) return toLogin()

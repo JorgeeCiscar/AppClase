@@ -9,7 +9,7 @@ import { DAW1_SUBJECTS, seedSubjects, transaction, type DB } from './db'
 import {
   addPaths, chooseFiles, chooseFolder, openFile, openWith, relocate, removeItem, revalidate, reveal, searchContent
 } from './files'
-import { cancelRead, downloadFiles, logoutPlatform, readActivity } from './importer'
+import { cancelRead, downloadFiles, logoutPlatform, readActivity, readCourse } from './importer'
 import { syncWatchers } from './watcher'
 import { findUnit } from '../shared/match'
 
@@ -523,6 +523,7 @@ export function registerIpc(db: DB): void {
   })
 
   h('importer:read', (url: string) => readActivity(url))
+  h('importer:readCourse', (url: string) => readCourse(url))
   h('importer:cancel', () => cancelRead())
   h('importer:download', (itemId: number, files: { name: string; url: string; section?: FileSection }[]) =>
     synced(downloadFiles(db, getSettings(db).downloads_dir, itemId, Array.isArray(files) ? files : []))

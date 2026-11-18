@@ -64,6 +64,16 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
 
 Botón **«Importar desde enlace…»** en el Panel, en cada asignatura y en Entregas.
 
+- **Asignatura entera**: si pegas el enlace de la asignatura (la página del curso,
+  `…/course/view.php?id=…`), se leen todas sus secciones y actividades. Cada sección es una
+  **unidad** («Unitat 1: …», «UD 3 - Arrays»; la «General» queda sin unidad) y cada actividad se
+  importa según su tipo: **tarea** → ejercicio (con fecha, estado, enunciado y adjuntos),
+  **cuestionario** → examen (con su fecha de cierre), **fichero** o **carpeta** → apunte (con el
+  fichero o un .zip de la carpeta), **página** → apunte (con su texto), **URL** → enlace. Los foros
+  y las etiquetas de texto se ignoran. Antes de importar se revisa todo por unidades y se pueden
+  desmarcar actividades o tipos enteros; lo que **ya está en la app** sale desmarcado, así que
+  se puede repetir cada semana sin duplicar nada. Las unidades se reutilizan si ya existen.
+
 - Puedes poner **varios enlaces**: «+ Añadir otro enlace» añade campos, y si pegas varios enlaces
   de golpe en un campo se reparten solos. Se leen uno tras otro **en ese orden**; después revisas
   cada actividad, también en orden («Revisa la actividad 2 de 5»), y puedes guardarla o saltarla.

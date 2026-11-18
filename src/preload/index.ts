@@ -53,6 +53,7 @@ const api: Api = {
   },
   importer: {
     read: invoke('importer:read'),
+    readCourse: invoke('importer:readCourse'),
     cancel: invoke('importer:cancel'),
     download: invoke('importer:download'),
     logout: invoke('importer:logout')

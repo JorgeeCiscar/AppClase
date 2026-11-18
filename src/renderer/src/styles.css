@@ -217,3 +217,20 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
 /* Los nombres largos de asignatura no deben ensanchar los desplegables y partir la barra. */
 .bulk-bar select { width: 190px; min-width: 0; }
 .bulk-list { margin: 0; padding-left: 18px; max-height: 180px; overflow: auto; }
+
+/* ---------- Importar una asignatura entera ---------- */
+.modal.modal-wide { width: min(880px, 100%); }
+.type-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.type-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--border);
+  border-radius: 99px; background: var(--panel-2); font-size: 13px; cursor: pointer; }
+.course-sections { display: flex; flex-direction: column; gap: 4px; max-height: 52vh; overflow: auto; padding-right: 4px; }
+.course-section { margin-bottom: 6px; }
+.course-section-title { display: flex; align-items: center; gap: 8px; padding: 8px 2px 4px; border-bottom: 1px solid var(--border); }
+.course-act { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 24px; border-radius: 6px; cursor: pointer; }
+.course-act:hover { background: var(--panel-2); }
+.course-act.exists { opacity: .55; cursor: default; }
+.course-act-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.course-act .result-label { font-size: 12px; white-space: nowrap; color: var(--muted); }
+.course-act.result-hecha .result-label { color: var(--ok); }
+.course-act.result-importando .result-label { color: var(--accent); }
+.course-act.result-error .result-label, .course-act.result-aviso .result-label { color: var(--bad); white-space: normal; }

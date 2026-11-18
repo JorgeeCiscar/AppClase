@@ -164,6 +164,20 @@ export interface ScrapedActivity {
   files: ActivityFile[]
 }
 
+/** Una actividad en la página de una asignatura. modtype es el tipo de Moodle (assign, quiz, resource…). */
+export interface CourseActivity {
+  name: string
+  url: string
+  modtype: string
+}
+
+/** La página de una asignatura: su nombre y sus secciones (unidades) con sus actividades. */
+export interface ScrapedCourse {
+  url: string
+  course: string
+  sections: { title: string; activities: CourseActivity[] }[]
+}
+
 export interface DownloadResult extends AddFilesResult {
   /** Carpeta donde se guardaron los ficheros. */
   dir: string
@@ -271,6 +285,8 @@ export interface Api {
   importer: {
     /** Abre la página (pidiendo iniciar sesión si hace falta) y lee la actividad. */
     read: (url: string) => Promise<ScrapedActivity>
+    /** Lee la página de una asignatura entera: unidades y actividades. */
+    readCourse: (url: string) => Promise<ScrapedCourse>
     /** Cierra la ventana de lectura en curso. */
     cancel: () => Promise<void>
     /** Descarga ficheros de la plataforma con la sesión iniciada y los indexa en el elemento. */

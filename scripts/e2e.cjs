@@ -559,7 +559,6 @@ function check(name, ok, detail = '') {
     })
     const outcome = await pending
     check('cerrar esa ventana cancela la lectura con un mensaje claro', /cancelada/.test(outcome), outcome)
-    server.close()
 
     // --- Colores según se acerca el plazo (en una asignatura sin más entregas) ---
     const plus = (n) => {
@@ -779,6 +778,112 @@ function check(name, ok, detail = '') {
     )
     await win.keyboard.press('Escape')
     check('Escape sale del modo selección', (await win.locator('.bulk-bar').count()) === 0 && (await win.locator('.list-row.is-checked').count()) === 0)
+
+    // --- Importar una asignatura entera desde su enlace ---
+    const courseUrl = `${base}/course/view.php?id=55`
+    await win.click('.sidebar nav button:has-text("Entregas")')
+    await win.click('button:has-text("Importar desde enlace")')
+    await win.fill('.modal input[name="activity_url"]', courseUrl)
+    const courseLoginP = app.waitForEvent('window')
+    await win.click('.modal button[type="submit"]')
+    // Antes se cerró la sesión: la plataforma vuelve a pedir el login.
+    const courseLogin = await courseLoginP
+    await courseLogin.waitForSelector('input[type="password"]')
+    await courseLogin.fill('input[name="username"]', 'alumne')
+    await courseLogin.fill('input[type="password"]', 'secret')
+    await courseLogin.click('#loginbtn')
+    await win.waitForSelector('.modal .course-sections', { timeout: 30000 })
+    check('reconoce el enlace de una asignatura entera y lee sus unidades', true)
+    const units = await win.locator('.modal .course-section').evaluateAll((els) => els.map((e) => e.getAttribute('data-unit')))
+    check(
+      'cada sección del curso es una unidad (la «General» queda sin unidad)',
+      JSON.stringify(units) ===
+        JSON.stringify(['Sin unidad', 'Unidad 1 · Estructures de control', 'Unidad 3 · Arrays', 'Unidad 5 · Fitxers']),
+      JSON.stringify(units)
+    )
+    const courseText = (await win.locator('.modal').textContent()) || ''
+    check('ignora los foros de avisos y las etiquetas de texto', !courseText.includes('Avisos') && !courseText.includes('Llegiu els apunts'))
+    check('lo que ya está en la app sale marcado y no se repite', (await win.locator('.modal .course-act.exists').count()) === 2)
+    check(
+      'reconoce la asignatura por el nombre del curso',
+      (await win.locator('.modal select[name="course_subject"]').inputValue()) === idOf('Programación')
+    )
+    const importBtn = win.locator('.modal button.primary')
+    check('marca las 7 actividades nuevas', /Importar 7 actividades/.test((await importBtn.textContent()) || ''), await importBtn.textContent())
+    await win.uncheck('.modal input[name="type_enlaces"]')
+    check('se puede desmarcar un tipo entero (enlaces)', /Importar 6 actividades/.test((await importBtn.textContent()) || ''))
+    await win.check('.modal input[name="type_enlaces"]')
+    await win.screenshot({ path: path.join(S, 'shots', 'asignatura-revision.png') })
+    await importBtn.click()
+    await win.waitForSelector('.modal h3:has-text("Asignatura importada")', { timeout: 90000 })
+    const done = await win.locator('.modal [data-result="hecha"]').count()
+    const problems = await win.locator('.modal [data-result="error"], .modal [data-result="aviso"]').allTextContents()
+    check('importa las 7 en orden, sin errores', done === 7 && problems.length === 0, problems.join(' | ') || `${done} hechas`)
+    await win.screenshot({ path: path.join(S, 'shots', 'asignatura-importada.png') })
+    await win.click('.modal button:has-text("Cerrar")')
+
+    const it = (t) => win.evaluate(async (text) => (await window.api.items.list({ text }))[0], t)
+    const filesOf = (id) => win.evaluate((x) => window.api.files.list(x), id)
+    const proId = idOf('Programación')
+    const prog = await it('Programació didàctica')
+    const progFiles = prog ? await filesOf(prog.id) : []
+    check(
+      'un fichero de la sección General → apunte sin unidad, con el PDF descargado',
+      prog && prog.kind === 'apunte' && prog.unit_id === null && progFiles.length === 1 && progFiles[0].name === 'programacio-didactica.pdf' && fs.existsSync(progFiles[0].path),
+      progFiles.map((f) => f.name).join(', ')
+    )
+    const apunts = await it('Apunts tema 1')
+    check(
+      '«Unitat 1» va a la unidad 1 que ya existía (aunque esté en castellano)',
+      apunts && apunts.unit_number === 1 && apunts.unit_title === 'Estructuras de control' && String(apunts.subject_id) === proId,
+      apunts && `${apunts.unit_number}. ${apunts.unit_title}`
+    )
+    const docs = await it('Documentació Java')
+    check('un enlace se guarda como enlace', docs && docs.kind === 'enlace' && docs.unit_number === 1)
+    const folder = await it('Exercicis resolts')
+    const folderFiles = folder ? await filesOf(folder.id) : []
+    check(
+      'una carpeta se descarga entera en un .zip',
+      folder && folder.kind === 'apunte' && folderFiles.length === 1 && folderFiles[0].name === 'Exercicis resolts.zip',
+      folderFiles.map((f) => f.name).join(', ')
+    )
+    const quizItem = (await win.evaluate(async () => (await window.api.items.list({ text: 'Qüestionari' }))[0]))
+    check(
+      'un cuestionario → examen en la unidad 3, con su fecha de cierre («Tanca»)',
+      quizItem && quizItem.kind === 'examen' && quizItem.unit_number === 3 && quizItem.due_date === '2026-12-11',
+      quizItem && `${quizItem.kind} · ${quizItem.unit_number} · ${quizItem.due_date}`
+    )
+    const pageItem = await win.evaluate(async () => (await window.api.items.list({ text: 'Resum' }))[0])
+    check('una página → apunte con su texto en las notas', pageItem && pageItem.kind === 'apunte' && /col·lecció/.test(pageItem.notes || ''))
+    const t6 = await it('Tasca 6')
+    check(
+      'una tarea nueva → ejercicio pendiente con su fecha, en la unidad 5 creada («Fitxers»)',
+      t6 && t6.kind === 'ejercicio' && t6.status === 'pendiente' && t6.due_date === '2026-12-16' && t6.unit_number === 5 && t6.unit_title === 'Fitxers',
+      t6 && `${t6.status} · ${t6.due_date} · ${t6.unit_number}. ${t6.unit_title}`
+    )
+    const unitsNow = await proUnits()
+    check(
+      'no duplica unidades: solo añade la 5',
+      JSON.stringify(unitsNow) === JSON.stringify(['1. Estructuras de control', '3. Arrays', '4. Funciones', '5. Fitxers']),
+      unitsNow.join(' | ')
+    )
+    check(
+      'no repite las tareas que ya estaban',
+      (await win.evaluate(async () => (await window.api.items.list({ text: 'Tasca 3' })).length)) === 1 &&
+        (await win.evaluate(async () => (await window.api.items.list({ text: 'Tarea 4' })).length)) === 2
+    )
+
+    // Volver a importar la misma asignatura: todo está ya, no se repite nada.
+    await win.click('button:has-text("Importar desde enlace")')
+    await win.fill('.modal input[name="activity_url"]', courseUrl)
+    await win.click('.modal button[type="submit"]')
+    await win.waitForSelector('.modal .course-sections', { timeout: 30000 })
+    check(
+      'al repetirlo, todo sale como «ya en la app» y no hay nada que importar',
+      (await win.locator('.modal .course-act.exists').count()) === 9 && (await win.locator('.modal button.primary').isDisabled())
+    )
+    await win.click('.modal button:has-text("Cancelar")')
+    server.close()
 
     check('sin errores de JavaScript en la interfaz', errors.length === 0, errors.join(' | '))
     await app.close()

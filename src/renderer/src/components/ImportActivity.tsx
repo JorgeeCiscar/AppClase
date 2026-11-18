@@ -3,6 +3,7 @@ import type { Item, ScrapedActivity, Subject } from '../../../shared/types'
 import { FILE_SECTION_LABEL, FILE_SECTIONS } from '../../../shared/types'
 import { matchSubject } from '../../../shared/match'
 import { errorMessage, fmtDate } from '../util'
+import CourseImport, { isCourseUrl } from './CourseImport'
 import ItemForm from './ItemForm'
 import Modal from './Modal'
 
@@ -24,7 +25,10 @@ const plural = (n: number, one: string, many: string): string => `${n} ${n === 1
 function describe(e: Entry): { kind: string; text: string } {
   if (e.outcome?.kind === 'guardada') {
     const text = `Guardada · ${plural(e.outcome.files, 'fichero', 'ficheros')}`
-    return { kind: 'guardada', text: e.outcome.errors.length ? `${text} · no se pudo descargar ${e.outcome.errors[0]}` : text }
+    return {
+      kind: 'guardada',
+      text: e.outcome.errors.length ? `${text} · no se pudo descargar ${e.outcome.errors[0]}` : text
+    }
   }
   if (e.outcome?.kind === 'saltada') return { kind: 'saltada', text: 'Saltada' }
   if (e.status === 'error') return { kind: 'error', text: `No se pudo leer: ${e.error}` }
@@ -45,9 +49,10 @@ function ImportDialog({
 }: {
   defaultSubjectId?: number
   onToast: (msg: string, bad?: boolean) => void
-  onImported: (item: Item) => void
+  onImported: (item?: Item) => void
   onClose: () => void
 }) {
+  const [courseUrl, setCourseUrl] = useState<string | null>(null)
   const [step, setStep] = useState<'urls' | 'reading' | 'review' | 'summary'>('urls')
   const [urls, setUrls] = useState<string[]>([''])
   const [error, setError] = useState('')
@@ -102,6 +107,15 @@ function ImportDialog({
     e.preventDefault()
     if (!unique.length) return
     setError('')
+    // El enlace de una asignatura entera se importa con todas sus unidades y actividades.
+    if (unique.some(isCourseUrl)) {
+      if (unique.length > 1) {
+        setError('El enlace de una asignatura entera va solo: quita los demás enlaces o impórtalos aparte.')
+        return
+      }
+      setCourseUrl(unique[0])
+      return
+    }
     stopRef.current = false
     let q: Entry[] = unique.map((url) => ({ url, status: 'en espera' }))
     setQueue(q)
@@ -141,6 +155,18 @@ function ImportDialog({
       void window.api.importer.cancel()
     }
     onClose()
+  }
+
+  if (courseUrl) {
+    return (
+      <CourseImport
+        url={courseUrl}
+        defaultSubjectId={defaultSubjectId}
+        onToast={onToast}
+        onImported={() => onImported()}
+        onClose={onClose}
+      />
+    )
   }
 
   // ------------------------------------------------------------------ resumen
@@ -199,7 +225,12 @@ function ImportDialog({
                     style={{ flex: 1, minWidth: 0 }}
                   />
                   {urls.length > 1 && (
-                    <button type="button" className="tiny ghost" aria-label={`Quitar el enlace ${i + 1}`} onClick={() => removeRow(i)}>
+                    <button
+                      type="button"
+                      className="tiny ghost"
+                      aria-label={`Quitar el enlace ${i + 1}`}
+                      onClick={() => removeRow(i)}
+                    >
                       ✕
                     </button>
                   )}
@@ -237,7 +268,8 @@ function ImportDialog({
             <p className="muted small">
               De cada actividad se leen el título, la asignatura, la fecha de entrega, el enunciado y los ficheros.
               Luego las revisas una a una, en el mismo orden, antes de guardarlas. Puedes pegar varios enlaces de golpe
-              en un campo.
+              en un campo. Si pegas el enlace de una <strong>asignatura entera</strong>, se importan todas sus unidades
+              y actividades.
             </p>
           )}
 
@@ -246,11 +278,7 @@ function ImportDialog({
               Cancelar
             </button>
             <button type="submit" className="primary" disabled={reading || !unique.length}>
-              {reading
-                ? 'Leyendo…'
-                : unique.length > 1
-                  ? `Leer ${unique.length} actividades`
-                  : 'Leer actividad'}
+              {reading ? 'Leyendo…' : unique.length > 1 ? `Leer ${unique.length} actividades` : 'Leer actividad'}
             </button>
           </div>
         </form>
@@ -284,7 +312,11 @@ function ImportDialog({
         <>
           {' '}
           · curso «{act.course}» →{' '}
-          {matchedSubject ? <strong>{matchedSubject.name}</strong> : <strong>sin asignatura reconocida, elígela</strong>}
+          {matchedSubject ? (
+            <strong>{matchedSubject.name}</strong>
+          ) : (
+            <strong>sin asignatura reconocida, elígela</strong>
+          )}
         </>
       ) : null}
       {act.due_date ? (
@@ -298,13 +330,18 @@ function ImportDialog({
       {act.unit && (
         <>
           {' '}
-          · unidad <strong data-detected="unit">{act.unit.number !== null ? `${act.unit.number}. ` : ''}{act.unit.title}</strong>
+          · unidad{' '}
+          <strong data-detected="unit">
+            {act.unit.number !== null ? `${act.unit.number}. ` : ''}
+            {act.unit.title}
+          </strong>
         </>
       )}
       {act.submission && (
         <>
           {' '}
-          · estado de la entrega: «{act.submission.label}» → <strong data-detected="status">{act.submission.status}</strong>
+          · estado de la entrega: «{act.submission.label}» →{' '}
+          <strong data-detected="status">{act.submission.status}</strong>
         </>
       )}
       {act.graded && (
@@ -405,7 +442,9 @@ function ImportDialog({
           reviewFrom(record({ kind: 'guardada', title: item.title, files: added, errors }), idx + 1)
           return
         }
-        const parts = [files.length ? `Actividad guardada · ${plural(added, 'fichero', 'ficheros')} en ${dir}` : 'Actividad guardada']
+        const parts = [
+          files.length ? `Actividad guardada · ${plural(added, 'fichero', 'ficheros')} en ${dir}` : 'Actividad guardada'
+        ]
         if (errors.length) parts.push(`No se pudo descargar ${errors[0]}`)
         onToast(parts.join(' · '), errors.length > 0)
         onClose()
@@ -423,7 +462,7 @@ export default function ImportButton({
 }: {
   defaultSubjectId?: number
   onToast: (msg: string, bad?: boolean) => void
-  onImported: (item: Item) => void
+  onImported: (item?: Item) => void
   className?: string
 }) {
   const [open, setOpen] = useState(false)

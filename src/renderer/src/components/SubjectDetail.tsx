@@ -91,6 +91,8 @@ export default function SubjectDetail({
 
   useEffect(() => {
     void load()
+    // Si un fichero cambia en la carpeta, se actualizan los contadores.
+    return window.api.files.onChanged(() => void load())
   }, [load])
 
   if (!subject) return <div className="page" />

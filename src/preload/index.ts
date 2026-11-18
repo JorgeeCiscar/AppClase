@@ -37,7 +37,8 @@ const api: Api = {
     openWith: invoke('files:openWith'),
     reveal: invoke('files:reveal'),
     relocate: invoke('files:relocate'),
-    revalidate: invoke('files:revalidate')
+    revalidate: invoke('files:revalidate'),
+    onChanged: (cb) => subscribe('files:changed', cb)
   },
   tags: invoke('tags'),
   search: invoke('search'),

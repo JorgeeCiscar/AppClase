@@ -7,9 +7,10 @@ import type {
 import { ITEM_KINDS, STATUSES } from '../shared/types'
 import { DAW1_SUBJECTS, seedSubjects, transaction, type DB } from './db'
 import {
-  addPaths, chooseFiles, chooseFolder, openFile, openWith, relocate, revalidate, reveal, searchContent
+  addPaths, chooseFiles, chooseFolder, openFile, openWith, relocate, removeItem, revalidate, reveal, searchContent
 } from './files'
 import { cancelRead, downloadFiles, logoutPlatform, readActivity } from './importer'
+import { syncWatchers } from './watcher'
 import { findUnit } from '../shared/match'
 
 const SEP = String.fromCharCode(31) // separador para group_concat de etiquetas
@@ -292,11 +293,18 @@ export function registerIpc(db: DB): void {
   const h = (channel: string, fn: (...args: never[]) => unknown): void => {
     ipcMain.handle(channel, (_e, ...args) => (fn as (...a: unknown[]) => unknown)(...args))
   }
+  /** Tras cambiar los ficheros indexados, el vigilante ajusta las carpetas que observa. */
+  const synced = async <T>(result: T | Promise<T>): Promise<T> => {
+    const r = await result
+    syncWatchers()
+    return r
+  }
 
   h('subjects:list', () => db.prepare(`${SUBJECT_SELECT} ORDER BY s.position, s.name COLLATE NOCASE`).all())
   h('subjects:save', (s: SubjectInput) => saveSubject(db, s))
   h('subjects:remove', (id: number) => {
     db.prepare('DELETE FROM subjects WHERE id = ?').run(id)
+    syncWatchers()
   })
   h('subjects:seedDaw1', () => {
     transaction(db, () => {
@@ -330,9 +338,10 @@ export function registerIpc(db: DB): void {
   h('items:list', (f?: ItemFilter) => listItems(db, f ?? {}))
   h('items:get', (id: number) => withTags<Item>(db.prepare(`${ITEM_SELECT} WHERE i.id = ?`).get(id) as Row))
   h('items:save', (i: ItemInput) => saveItem(db, i))
-  h('items:remove', (id: number) => {
-    db.prepare('DELETE FROM items WHERE id = ?').run(id)
-  })
+  // Con trashFiles, los ficheros del elemento van a la papelera de reciclaje.
+  h('items:remove', (id: number, opts?: { trashFiles?: boolean }) =>
+    synced(removeItem(db, id, opts?.trashFiles === true, getSettings(db).downloads_dir))
+  )
   h('items:setStatus', (id: number, status: string | null) => {
     const s = nullIfEmpty(status)
     if (s && !STATUSES.includes(s as (typeof STATUSES)[number])) throw new Error('Estado no válido')
@@ -351,12 +360,13 @@ export function registerIpc(db: DB): void {
     revalidate(db, itemId)
     return db.prepare('SELECT * FROM files WHERE item_id = ? ORDER BY name COLLATE NOCASE').all(itemId)
   })
-  h('files:choose', (itemId: number) => chooseFiles(db, win(), itemId))
-  h('files:chooseFolder', (itemId: number) => chooseFolder(db, win(), itemId))
-  h('files:addPaths', (itemId: number, paths: string[]) => addPaths(db, itemId, paths))
+  h('files:choose', (itemId: number) => synced(chooseFiles(db, win(), itemId)))
+  h('files:chooseFolder', (itemId: number) => synced(chooseFolder(db, win(), itemId)))
+  h('files:addPaths', (itemId: number, paths: string[]) => synced(addPaths(db, itemId, paths)))
   h('files:remove', (id: number) => {
     // Solo se quita del índice: el fichero sigue en el disco.
     db.prepare('DELETE FROM files WHERE id = ?').run(id)
+    syncWatchers()
   })
   h('files:open', (id: number) => openFile(db, id))
   h('files:openWith', (id: number, openerIndex: number) => {
@@ -366,7 +376,7 @@ export function registerIpc(db: DB): void {
     return openWith(db, id, o.command, args)
   })
   h('files:reveal', (id: number) => reveal(db, id))
-  h('files:relocate', (id: number) => relocate(db, win(), id))
+  h('files:relocate', (id: number) => synced(relocate(db, win(), id)))
   h('files:revalidate', (itemId?: number) => revalidate(db, itemId))
 
   h('tags', () =>
@@ -426,7 +436,7 @@ export function registerIpc(db: DB): void {
   h('importer:read', (url: string) => readActivity(url))
   h('importer:cancel', () => cancelRead())
   h('importer:download', (itemId: number, files: { name: string; url: string; section?: FileSection }[]) =>
-    downloadFiles(db, getSettings(db).downloads_dir, itemId, Array.isArray(files) ? files : [])
+    synced(downloadFiles(db, getSettings(db).downloads_dir, itemId, Array.isArray(files) ? files : []))
   )
   h('importer:logout', () => logoutPlatform())
 

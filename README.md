@@ -25,13 +25,20 @@ aplicación que el sistema tenga asociada, se editan ahí y la app detecta el ca
   explorador. Se guarda la ruta, el tamaño y la fecha de modificación.
 - **Abrir con la aplicación del sistema** (`shell.openPath`), **mostrar en la carpeta** y un
   menú **«Abrir con»** con los programas que configures en Ajustes (por ejemplo VS Code).
-- **Control de cambios**: al volver a la ventana, o con «Comprobar ficheros», se relee el
-  disco. Si editaste un fichero fuera, se actualiza su fecha; si lo moviste o borraste,
-  queda marcado como **«no se encuentra»** y se puede **volver a localizar** sin perder
-  etiquetas ni notas.
+- **Sincronizada con tus carpetas, en directo**: la app vigila las carpetas de los ficheros
+  indexados. Si **editas** un fichero con otro programa, se actualiza al momento; si lo
+  **renombras** dentro de su carpeta, lo sigue con el nombre nuevo; si lo **borras**, desaparece
+  de la app. Si desaparece la **carpeta entera** (por ejemplo, un USB sin conectar), no se quita:
+  queda marcado como **«no se encuentra»** y se puede **volver a localizar**. Además se repasa
+  todo cada minuto y al volver a la ventana.
+- **Borrar una actividad borra también sus ficheros**: van a la **papelera de reciclaje** (se
+  pueden recuperar), salvo los que use también otra actividad, y se quitan las carpetas de
+  descarga que queden vacías. Al borrar, una casilla permite conservarlos.
 - **Panel** con lo que está fuera de plazo, lo que vence en dos semanas y los últimos
   ficheros añadidos.
-- **Entregas**: todo lo que tiene fecha límite, **agrupado por asignatura y, dentro, por unidad**
+- **Entregas**: todo lo que tiene fecha límite, en **tarjetas**; al pulsar una, su **ficha se abre
+  al lado** sin tapar las demás (Escape la cierra). Las tarjetas van **agrupadas por asignatura y,
+  dentro, por unidad**
   (en el orden de la pestaña Asignaturas, con cuántas hay y cuántas están fuera de plazo) o, si lo
   prefieres, todo junto por fecha; la app recuerda la opción. Filtrable por estado y por fuera de plazo.
 - **Colores según el plazo**: cada entrega cambia de color según se acerca su fecha: verde (más de

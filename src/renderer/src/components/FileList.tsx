@@ -37,7 +37,12 @@ export default function FileList({
   useEffect(() => {
     const onFocus = (): void => void load()
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    // Y al instante si el vigilante ve que un fichero cambió en su carpeta.
+    const off = window.api.files.onChanged(() => void load())
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      off()
+    }
   }, [load])
 
   const report = (r: { added: number; skipped: number; errors: string[] }): void => {

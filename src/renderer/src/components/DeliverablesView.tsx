@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Item, Opener, Status, Subject } from '../../../shared/types'
 import { STATUSES } from '../../../shared/types'
 import { URGENCY_LABEL, URGENCY_ORDER, today } from '../util'
+import EditItemDialog from './EditItemDialog'
 import ImportButton from './ImportActivity'
 import ItemDetail from './ItemDetail'
 import ItemRow from './ItemRow'
@@ -99,6 +100,8 @@ export default function DeliverablesView({
   const [onlyOverdue, setOnlyOverdue] = useState(false)
   const [grouping, setGrouping] = useState<Grouping>(readGrouping)
   const [openItem, setOpenItem] = useState<number | null>(null)
+  const [editing, setEditing] = useState<Item | null>(null)
+  const [refresh, setRefresh] = useState(0)
 
   const load = useCallback(async () => {
     const [list, subs] = await Promise.all([
@@ -115,98 +118,128 @@ export default function DeliverablesView({
 
   useEffect(() => {
     void load()
+    // Si un fichero cambia en la carpeta, se actualizan los contadores de las tarjetas.
+    return window.api.files.onChanged(() => void load())
   }, [load])
+
+  // Escape cierra la ficha lateral (si no hay una ventana abierta encima).
+  useEffect(() => {
+    if (openItem === null) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && !document.querySelector('.modal')) setOpenItem(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [openItem])
 
   const open = (x: Item): void => setOpenItem(x.id)
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <h1>Entregas</h1>
-        <ImportButton className="primary" onToast={onToast} onImported={() => void load()} />
-      </div>
+    <div className={`page deliv-page${openItem !== null ? ' with-detail' : ''}`}>
+      <div className="deliv-layout">
+        <div className="deliv-main">
+          <div className="page-header">
+            <h1>Entregas</h1>
+            <ImportButton className="primary" onToast={onToast} onImported={() => void load()} />
+          </div>
 
-      <div className="row-wrap" style={{ marginTop: 12 }}>
-        <select
-          name="grouping"
-          value={grouping}
-          onChange={(e) => {
-            const g = e.target.value as Grouping
-            setGrouping(g)
-            saveGrouping(g)
-          }}
-        >
-          <option value="asignatura">Por asignatura</option>
-          <option value="fecha">Todas por fecha</option>
-        </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value as Status | '')}>
-          <option value="">Todos los estados</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <label className="row small">
-          <input type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
-          solo fuera de plazo
-        </label>
-      </div>
-      <div className="urg-legend" aria-label="Colores según el plazo">
-        {URGENCY_ORDER.map((u) => (
-          <span key={u} className={`urg-${u}`}>
-            {URGENCY_LABEL[u]}
-          </span>
-        ))}
-      </div>
-
-      {items.length === 0 ? (
-        <p className="empty">Nada con fecha límite que cumpla el filtro.</p>
-      ) : grouping === 'fecha' ? (
-        <div className="deliv-groups" data-grouping="fecha">
-          <div className="list">
-            {items.map((i) => (
-              <ItemRow key={i.id} item={i} onOpen={open} showSubject />
+          <div className="row-wrap" style={{ marginTop: 12 }}>
+            <select
+              name="grouping"
+              value={grouping}
+              onChange={(e) => {
+                const g = e.target.value as Grouping
+                setGrouping(g)
+                saveGrouping(g)
+              }}
+            >
+              <option value="asignatura">Por asignatura</option>
+              <option value="fecha">Todas por fecha</option>
+            </select>
+            <select value={status} onChange={(e) => setStatus(e.target.value as Status | '')}>
+              <option value="">Todos los estados</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <label className="row small">
+              <input type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
+              solo fuera de plazo
+            </label>
+          </div>
+          <div className="urg-legend" aria-label="Colores según el plazo">
+            {URGENCY_ORDER.map((u) => (
+              <span key={u} className={`urg-${u}`}>
+                {URGENCY_LABEL[u]}
+              </span>
             ))}
           </div>
-        </div>
-      ) : (
-        <div className="deliv-groups" data-grouping="asignatura">
-          {groupBySubject(items, subjects).map((g) => {
-            const overdue = g.items.filter(isOverdue).length
-            return (
-              <section key={g.id} className="subject-group" data-subject={g.name}>
-                <h2 className="subject-group-title" style={{ borderLeftColor: g.color ?? 'var(--accent)' }}>
-                  <span>{g.name}</span>
-                  <span className="count">
-                    {g.items.length} entrega{g.items.length === 1 ? '' : 's'}
-                    {overdue > 0 && <span className="due-over"> · {overdue} fuera de plazo</span>}
-                  </span>
-                </h2>
-                {groupByUnit(g.items).map((u) => (
-                  <div key={u.key} className="unit-group" data-unit={u.label ?? undefined}>
-                    {u.label && <div className="unit-group-title">{u.label}</div>}
-                    <div className="list">
-                      {u.items.map((i) => (
-                        <ItemRow key={i.id} item={i} onOpen={open} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </section>
-            )
-          })}
-        </div>
-      )}
 
-      {openItem !== null && (
-        <ItemDetail
-          itemId={openItem}
-          openers={openers}
-          onToast={onToast}
-          onChanged={() => void load()}
-          onEdit={() => setOpenItem(null)}
-          onClose={() => setOpenItem(null)}
+          {items.length === 0 ? (
+            <p className="empty">Nada con fecha límite que cumpla el filtro.</p>
+          ) : grouping === 'fecha' ? (
+            <div className="deliv-groups" data-grouping="fecha">
+              <div className="list">
+                {items.map((i) => (
+                  <ItemRow key={i.id} item={i} onOpen={open} showSubject selected={i.id === openItem} />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="deliv-groups" data-grouping="asignatura">
+              {groupBySubject(items, subjects).map((g) => {
+                const overdue = g.items.filter(isOverdue).length
+                return (
+                  <section key={g.id} className="subject-group" data-subject={g.name}>
+                    <h2 className="subject-group-title" style={{ borderLeftColor: g.color ?? 'var(--accent)' }}>
+                      <span>{g.name}</span>
+                      <span className="count">
+                        {g.items.length} entrega{g.items.length === 1 ? '' : 's'}
+                        {overdue > 0 && <span className="due-over"> · {overdue} fuera de plazo</span>}
+                      </span>
+                    </h2>
+                    {groupByUnit(g.items).map((u) => (
+                      <div key={u.key} className="unit-group" data-unit={u.label ?? undefined}>
+                        {u.label && <div className="unit-group-title">{u.label}</div>}
+                        <div className="list">
+                          {u.items.map((i) => (
+                            <ItemRow key={i.id} item={i} onOpen={open} selected={i.id === openItem} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {openItem !== null && (
+          <ItemDetail
+            key={`${openItem}:${refresh}`}
+            asPanel
+            itemId={openItem}
+            openers={openers}
+            onToast={onToast}
+            onChanged={() => void load()}
+            onEdit={(i) => setEditing(i)}
+            onClose={() => setOpenItem(null)}
+          />
+        )}
+      </div>
+
+      {editing && (
+        <EditItemDialog
+          item={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            setRefresh((r) => r + 1)
+            void load()
+          }}
         />
       )}
     </div>

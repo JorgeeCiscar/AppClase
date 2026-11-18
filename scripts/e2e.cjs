@@ -18,6 +18,12 @@ const sqlFile = path.join(S, 'curso', 'consultas.sql')
 fs.writeFileSync(javaFile, 'public class Ejercicio3 {\n  // bucle while de ejemplo\n  void run() { while (true) {} }\n}\n')
 fs.writeFileSync(txtFile, 'Tema 1: introduccion a la programacion\n')
 fs.writeFileSync(sqlFile, 'SELECT * FROM alumnos;\n')
+// Un fichero en una carpeta aparte, que luego desaparecerá entera (como un USB sin conectar).
+const usbDir = path.join(S, 'curso', 'usb')
+fs.mkdirSync(usbDir)
+const usbFile = path.join(usbDir, 'notas-usb.txt')
+fs.writeFileSync(usbFile, 'notas guardadas en el USB\n')
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 console.log('directorio de prueba:', S)
 
 let failures = 0
@@ -99,16 +105,16 @@ function check(name, ok, detail = '') {
     // --- indexar ficheros por su ruta (sin copiarlos) ---
     const added = await win.evaluate(
       ([id, paths]) => window.api.files.addPaths(id, paths),
-      [itemId, [javaFile, txtFile, sqlFile]]
+      [itemId, [javaFile, txtFile, sqlFile, usbFile]]
     )
-    check('se indexan 3 ficheros', added.added === 3, JSON.stringify(added))
+    check('se indexan 4 ficheros', added.added === 4, JSON.stringify(added))
 
     const dup = await win.evaluate(([id, paths]) => window.api.files.addPaths(id, paths), [itemId, [javaFile]])
     check('no se duplica un fichero ya indexado', dup.added === 0 && dup.skipped === 1, JSON.stringify(dup))
 
     check(
       'el fichero original no se ha movido ni copiado',
-      fs.existsSync(javaFile) && fs.readdirSync(path.join(S, 'curso')).length === 3
+      fs.existsSync(javaFile) && fs.readdirSync(path.join(S, 'curso')).length === 4
     )
 
     await win.click('.list-row:has-text("Ejercicio 3: bucles")')
@@ -116,14 +122,56 @@ function check(name, ok, detail = '') {
     const shownPath = await win.locator('.modal .file-row:has-text("Ejercicio3.java") .fpath').first().textContent()
     check('la lista muestra la ruta real del fichero', (shownPath || '').includes('curso'), shownPath || '')
 
-    // --- fichero movido fuera de la app: queda marcado como perdido ---
-    fs.unlinkSync(sqlFile)
-    await win.click('.modal button:has-text("Comprobar ficheros")')
-    await win.waitForSelector('.modal .file-row.missing')
-    check('un fichero borrado fuera se marca como «no se encuentra»', true)
+    // --- la app sigue en directo lo que haces en la carpeta, sin pulsar nada ---
+    await win.evaluate(() => {
+      window.__cambios = 0
+      window.api.files.onChanged(() => {
+        window.__cambios++
+      })
+    })
+    const waitChange = async (before) => {
+      for (let i = 0; i < 80; i++) {
+        if ((await win.evaluate(() => window.__cambios)) > before) return true
+        await sleep(100)
+      }
+      return false
+    }
+    const filesNow = () => win.evaluate((id) => window.api.files.list(id), itemId)
+    const before = await filesNow()
+    const javaBefore = before.find((f) => f.name === 'Ejercicio3.java')
+    const txtBefore = before.find((f) => f.name === 'apuntes-tema1.txt')
+
+    let n0 = await win.evaluate(() => window.__cambios)
+    fs.appendFileSync(javaFile, '// cambio hecho con otro programa\n')
+    check('editar un fichero en su carpeta avisa a la app al momento', await waitChange(n0))
+    const javaAfter = (await filesNow()).find((f) => f.id === javaBefore.id)
+    check('y se actualiza su tamaño', javaAfter && javaAfter.size > javaBefore.size, `${javaBefore.size} → ${javaAfter && javaAfter.size}`)
+
+    n0 = await win.evaluate(() => window.__cambios)
+    const renamedTxt = path.join(S, 'curso', 'apuntes-tema1-v2.txt')
+    fs.renameSync(txtFile, renamedTxt)
+    check('renombrar un fichero en su carpeta avisa a la app', await waitChange(n0))
+    const txtAfter = (await filesNow()).find((f) => f.id === txtBefore.id)
     check(
-      'y se puede volver a localizar',
-      await win.locator('.modal .file-row.missing button:has-text("Buscar de nuevo")').count() > 0
+      'y la app lo sigue con el nombre nuevo (mismo elemento, sin perderlo)',
+      txtAfter && txtAfter.name === 'apuntes-tema1-v2.txt' && txtAfter.path === renamedTxt && !txtAfter.missing,
+      txtAfter ? txtAfter.name : '(desapareció)'
+    )
+
+    n0 = await win.evaluate(() => window.__cambios)
+    fs.unlinkSync(sqlFile)
+    check('borrar un fichero de su carpeta avisa a la app', await waitChange(n0))
+    check('y desaparece de la app', !(await filesNow()).some((f) => f.name === 'consultas.sql'))
+    await win.waitForSelector('.modal .file-row:has-text("consultas.sql")', { state: 'detached', timeout: 5000 })
+    check('la ficha abierta se actualiza sola', (await win.locator('.modal .file-row:has-text("apuntes-tema1-v2.txt")').count()) === 1)
+
+    n0 = await win.evaluate(() => window.__cambios)
+    fs.rmSync(usbDir, { recursive: true, force: true })
+    check('si desaparece la carpeta entera, también avisa', await waitChange(n0))
+    await win.waitForSelector('.modal .file-row.missing:has-text("notas-usb.txt")', { timeout: 5000 })
+    check(
+      'pero no lo quita: queda «no se encuentra» para volver a localizarlo (USB sin conectar)',
+      (await win.locator('.modal .file-row.missing button:has-text("Buscar de nuevo")').count()) === 1
     )
 
     // --- abrir con la aplicación del sistema: se comprueba el error controlado ---
@@ -304,8 +352,19 @@ function check(name, ok, detail = '') {
     // En la ficha del elemento, los dos apartados se ven por separado.
     await win.click('.sidebar nav button:has-text("Entregas")')
     await win.click('.list-row:has-text("Tasca 3: bucles")')
-    await win.waitForSelector('.modal [data-section="enviado"]')
-    const groupText = async (s) => (await win.locator(`.modal [data-section="${s}"]`).textContent()) || ''
+    await win.waitForSelector('.detail-pane [data-section="enviado"]')
+    // Entregas: tarjetas en cuadrícula y la ficha al lado, sin ventana encima.
+    check('en Entregas la ficha se abre al lado, no como ventana', (await win.locator('.modal').count()) === 0)
+    const paneBox = await win.locator('.detail-pane').boundingBox()
+    const cardBox = await win.locator('.list-row.is-open').boundingBox()
+    check(
+      'las tarjetas siguen a la vista a la izquierda y la abierta queda marcada',
+      !!cardBox && cardBox.x + cardBox.width <= paneBox.x,
+      `tarjeta x=${cardBox && Math.round(cardBox.x)} · ficha x=${Math.round(paneBox.x)}`
+    )
+    const cardsPerRow = await win.locator('.deliv-groups .list').first().evaluate((l) => getComputedStyle(l).gridTemplateColumns.split(' ').length)
+    check('las entregas se ven como tarjetas en cuadrícula', cardsPerRow >= 2, `${cardsPerRow} columnas`)
+    const groupText = async (s) => (await win.locator(`.detail-pane [data-section="${s}"]`).textContent()) || ''
     const enviadoUi = await groupText('enviado')
     const enunciadoUi = await groupText('enunciado')
     check(
@@ -314,7 +373,8 @@ function check(name, ok, detail = '') {
         enunciadoUi.startsWith('Enunciado del profesor') && !enunciadoUi.includes('mi-entrega.zip')
     )
     await win.screenshot({ path: path.join(S, 'shots', 'ficha-calificada.png') })
-    await win.click('.modal button:has-text("Cerrar")')
+    await win.click('.detail-pane button:has-text("Cerrar")')
+    check('«Cerrar» quita la ficha lateral', (await win.locator('.detail-pane').count()) === 0)
 
     // Tarea sin calificar y solo con texto: el texto va a las notas y no se recoge tu entrega.
     await win.click('button:has-text("Importar desde enlace")')
@@ -527,7 +587,8 @@ function check(name, ok, detail = '') {
         rows.map((r) => ({
           title: r.querySelector('.title').textContent,
           u: r.getAttribute('data-urgency'),
-          border: getComputedStyle(r).borderLeftColor
+          // En Entregas son tarjetas: el color del plazo va en la barra de arriba.
+          border: getComputedStyle(r).borderTopColor
         }))
       )
     const wrong = urgentCases.filter(([t, , , u]) => (urg.find((r) => r.title === t) || {}).u !== u)
@@ -559,6 +620,54 @@ function check(name, ok, detail = '') {
       `próximas x=${Math.round(soonBox.x)} · recientes x=${Math.round(recentBox.x)}`
     )
     await win.screenshot({ path: path.join(S, 'shots', 'panel-tablero.png') })
+
+    // --- Editar desde la ficha lateral (antes «Editar» solo cerraba la ficha) ---
+    await win.click('.sidebar nav button:has-text("Entregas")')
+    await win.click('.list-row:has-text("U-hoy")')
+    await win.waitForSelector('.detail-pane')
+    await win.click('.detail-pane button:has-text("Editar")')
+    await win.waitForSelector('.modal input[name="title"]')
+    await win.fill('.modal input[name="title"]', 'U-hoy (editada)')
+    await win.click('.modal button:has-text("Guardar")')
+    await win.waitForSelector('.modal', { state: 'detached' })
+    await win.waitForSelector('.detail-pane-head h3:has-text("U-hoy (editada)")', { timeout: 5000 })
+    check('«Editar» abre el formulario y la ficha muestra el cambio', true)
+    await win.click('.detail-pane button:has-text("Cerrar")')
+
+    // --- Borrar una actividad: sus ficheros van a la papelera ---
+    const p2 = await win.evaluate(async () => (await window.api.items.list({ text: 'Práctica 2' }))[0])
+    const p2File = (await win.evaluate((id) => window.api.files.list(id), p2.id))[0]
+    check('la actividad a borrar tiene su fichero descargado', !!p2File && fs.existsSync(p2File.path), p2File && p2File.path)
+    await win.click('.list-row:has-text("Práctica 2")')
+    await win.waitForSelector('.detail-pane')
+    await win.click('.detail-pane button:has-text("Borrar elemento")')
+    await win.waitForSelector('.modal input[name="trash_files"]')
+    check('al borrar, por defecto se envían sus ficheros a la papelera', await win.locator('.modal input[name="trash_files"]').isChecked())
+    await win.click('.modal button:has-text("Borrar")')
+    await win.waitForSelector('.modal', { state: 'detached', timeout: 10000 })
+    const toast1 = (await win.locator('.toast').textContent().catch(() => '')) || ''
+    check('la actividad desaparece de la app', (await win.evaluate(async () => (await window.api.items.list({ text: 'Práctica 2' })).length)) === 0)
+    check('su fichero ya no está en la carpeta (está en la papelera)', !fs.existsSync(p2File.path), `${p2File.path} · aviso: ${toast1}`)
+    check(
+      'y se quita la carpeta de descargas que había quedado vacía',
+      !fs.existsSync(path.dirname(p2File.path)) && !fs.existsSync(path.join(descargas, 'LM')),
+      path.dirname(p2File.path)
+    )
+    check('la ficha lateral se cierra', (await win.locator('.detail-pane').count()) === 0)
+
+    // Borrar sin enviar a la papelera: los ficheros se quedan en su carpeta.
+    await win.click('.list-row:has-text("Ejercicio 3: bucles")')
+    await win.waitForSelector('.detail-pane')
+    await win.click('.detail-pane button:has-text("Borrar elemento")')
+    await win.waitForSelector('.modal input[name="trash_files"]')
+    await win.uncheck('.modal input[name="trash_files"]')
+    await win.click('.modal button:has-text("Borrar")')
+    await win.waitForSelector('.modal', { state: 'detached', timeout: 10000 })
+    check(
+      'si desmarcas la casilla, los ficheros se quedan en la carpeta',
+      (await win.evaluate(async () => (await window.api.items.list({ text: 'Ejercicio 3' })).length)) === 0 &&
+        fs.existsSync(javaFile) && fs.existsSync(renamedTxt)
+    )
 
     check('sin errores de JavaScript en la interfaz', errors.length === 0, errors.join(' | '))
     await app.close()

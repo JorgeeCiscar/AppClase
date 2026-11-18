@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Item, Opener, Stats } from '../../../shared/types'
 import { fmtDateTime, fileIcon } from '../util'
+import EditItemDialog from './EditItemDialog'
 import ImportButton from './ImportActivity'
 import ItemDetail from './ItemDetail'
 import ItemRow from './ItemRow'
@@ -14,13 +15,18 @@ export default function Dashboard({
 }) {
   const [stats, setStats] = useState<Stats | undefined>()
   const [openItem, setOpenItem] = useState<number | null>(null)
+  const [editing, setEditing] = useState<Item | null>(null)
 
   const load = useCallback(async () => setStats(await window.api.stats()), [])
   useEffect(() => {
     void load()
     const onFocus = (): void => void load()
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    const off = window.api.files.onChanged(() => void load())
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      off()
+    }
   }, [load])
 
   if (!stats) return <div className="page" />
@@ -122,8 +128,21 @@ export default function Dashboard({
           openers={openers}
           onToast={onToast}
           onChanged={() => void load()}
-          onEdit={() => setOpenItem(null)}
+          onEdit={(i) => {
+            setOpenItem(null)
+            setEditing(i)
+          }}
           onClose={() => setOpenItem(null)}
+        />
+      )}
+      {editing && (
+        <EditItemDialog
+          item={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            void load()
+          }}
         />
       )}
     </div>

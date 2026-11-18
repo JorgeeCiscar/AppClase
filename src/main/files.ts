@@ -1,7 +1,7 @@
 import { dialog, shell, type BrowserWindow, type OpenDialogOptions } from 'electron'
 import { spawn } from 'node:child_process'
-import { readdirSync, readFileSync, statSync, type Dirent, type Stats } from 'node:fs'
-import { basename, extname, join, resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync, rmdirSync, statSync, type Dirent, type Stats } from 'node:fs'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import type { AddFilesResult, ContentMatch, FileRef, FileSection, OpenResult } from '../shared/types'
 import { TEXT_EXT } from '../shared/types'
 import { transaction, type DB } from './db'
@@ -113,39 +113,104 @@ const openDialog = (win: BrowserWindow | null, opts: OpenDialogOptions) =>
 const getFile = (db: DB, id: number): FileRef | undefined =>
   db.prepare('SELECT * FROM files WHERE id = ?').get(id) as FileRef | undefined
 
-/**
- * Comprueba en el disco los ficheros indexados: actualiza tamaño y fecha de
- * modificación (por si los editaste fuera) y marca los que ya no están.
- * Devuelve cuántas filas cambiaron.
- */
-export function revalidate(db: DB, itemId?: number): number {
-  const rows = (
-    itemId === undefined
-      ? db.prepare('SELECT id, path, size, mtime, missing FROM files').all()
-      : db.prepare('SELECT id, path, size, mtime, missing FROM files WHERE item_id = ?').all(itemId)
-  ) as Pick<FileRef, 'id' | 'path' | 'size' | 'mtime' | 'missing'>[]
+type FileState = Pick<FileRef, 'id' | 'item_id' | 'path' | 'size' | 'mtime' | 'missing'>
 
+/**
+ * Si un fichero ya no está pero su carpeta sí, ¿se ha renombrado? Lo es si en la
+ * carpeta hay exactamente un fichero, aún no indexado en ese elemento, con el mismo
+ * tamaño y la misma fecha de modificación (renombrar no cambia ninguna de las dos).
+ */
+function findRenamed(db: DB, f: FileState, dir: string): string | null {
+  if (f.size === null || f.mtime === null) return null
+  let entries: Dirent<string>[]
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return null
+  }
+  const indexed = db.prepare('SELECT 1 FROM files WHERE item_id = ? AND path = ?')
+  const candidates: string[] = []
+  for (const e of entries) {
+    if (!e.isFile()) continue
+    const full = join(dir, e.name)
+    if (indexed.get(f.item_id, full)) continue
+    try {
+      const st = statSync(full)
+      if (st.size === f.size && isoMtime(st) === f.mtime) candidates.push(full)
+    } catch {
+      /* desapareció mientras se miraba */
+    }
+    if (candidates.length > 1) return null
+  }
+  return candidates.length === 1 ? candidates[0] : null
+}
+
+/**
+ * Pone el índice al día con el disco. Por cada fichero:
+ * - sigue ahí → se actualizan tamaño y fecha si lo editaste fuera;
+ * - su carpeta sigue ahí pero él no → si se renombró dentro de la carpeta se sigue
+ *   con el nombre nuevo; si no, se borró desde la carpeta y se quita de la app;
+ * - ha desaparecido la carpeta entera (p. ej. un USB sin conectar) → se marca como
+ *   «no se encuentra», sin quitarlo, para poder volver a localizarlo.
+ * Devuelve cuántos ficheros cambiaron.
+ */
+export function reconcile(db: DB, rows: FileState[]): number {
   let changed = 0
   transaction(db, () => {
-    const upd = db.prepare('UPDATE files SET size = ?, mtime = ?, missing = ? WHERE id = ?')
+    const upd = db.prepare('UPDATE files SET size = ?, mtime = ?, missing = 0 WHERE id = ?')
+    const markMissing = db.prepare('UPDATE files SET missing = 1 WHERE id = ?')
+    const moveTo = db.prepare('UPDATE files SET path = ?, name = ?, ext = ?, size = ?, mtime = ?, missing = 0 WHERE id = ?')
+    const remove = db.prepare('DELETE FROM files WHERE id = ?')
     for (const f of rows) {
-      let size: number | null = null
-      let mtime: string | null = null
-      let missing = 0
+      let st: Stats | null = null
       try {
-        const st = statSync(f.path)
-        size = st.size
-        mtime = isoMtime(st)
+        st = statSync(f.path)
       } catch {
-        missing = 1
+        st = null
       }
-      if (missing !== f.missing || (missing === 0 && (size !== f.size || mtime !== f.mtime))) {
-        upd.run(size, mtime, missing, f.id)
-        changed++
+      if (st) {
+        const mtime = isoMtime(st)
+        if (f.missing || st.size !== f.size || mtime !== f.mtime) {
+          upd.run(st.size, mtime, f.id)
+          changed++
+        }
+        continue
       }
+      const dir = dirname(f.path)
+      if (!existsSync(dir)) {
+        if (!f.missing) {
+          markMissing.run(f.id)
+          changed++
+        }
+        continue
+      }
+      const renamed = findRenamed(db, f, dir)
+      if (renamed) {
+        const rs = statSync(renamed)
+        moveTo.run(renamed, basename(renamed), extname(renamed).toLowerCase() || null, rs.size, isoMtime(rs), f.id)
+      } else {
+        remove.run(f.id)
+      }
+      changed++
     }
   })
   return changed
+}
+
+const FILE_STATE = 'SELECT id, item_id, path, size, mtime, missing FROM files'
+
+/** Comprueba en el disco los ficheros de un elemento (o todos). Ver reconcile(). */
+export function revalidate(db: DB, itemId?: number): number {
+  const rows = (
+    itemId === undefined ? db.prepare(FILE_STATE).all() : db.prepare(`${FILE_STATE} WHERE item_id = ?`).all(itemId)
+  ) as FileState[]
+  return reconcile(db, rows)
+}
+
+/** Comprueba solo los ficheros que están en estas carpetas (lo usa el vigilante). */
+export function revalidateDirs(db: DB, dirs: Set<string>): number {
+  const rows = (db.prepare(FILE_STATE).all() as FileState[]).filter((f) => dirs.has(dirname(f.path)))
+  return reconcile(db, rows)
 }
 
 /** Abre el fichero con la aplicación predeterminada del sistema. */
@@ -154,7 +219,8 @@ export async function openFile(db: DB, id: number): Promise<OpenResult> {
   if (!f) return { ok: false, error: 'El fichero ya no está en el índice' }
   revalidate(db, f.item_id)
   const fresh = getFile(db, id)
-  if (!fresh || fresh.missing) return { ok: false, error: `No se encuentra «${f.name}». Usa «Buscar de nuevo» para indicar su ruta actual.` }
+  if (!fresh) return { ok: false, error: `«${f.name}» se ha borrado de su carpeta` }
+  if (fresh.missing) return { ok: false, error: `No se encuentra «${f.name}». Usa «Buscar de nuevo» para indicar su ruta actual.` }
   // openPath devuelve '' si todo fue bien, o el mensaje de error del sistema.
   const err = await shell.openPath(fresh.path)
   return err ? { ok: false, error: err } : { ok: true }
@@ -256,4 +322,63 @@ export function searchContent(db: DB, q: string): { matches: ContentMatch[]; tru
     }
   }
   return { matches, truncated }
+}
+
+/** ¿Está «p» dentro de «root» (sin ser «root»)? */
+function isInside(root: string, p: string): boolean {
+  const rel = relative(root, p)
+  return !!rel && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+/**
+ * Quita las carpetas que hayan quedado vacías, subiendo hacia arriba, pero solo
+ * dentro de la carpeta de descargas de la app: nunca se toca una carpeta tuya.
+ */
+function pruneEmptyDirs(dirs: Iterable<string>, downloadsDir: string): void {
+  const root = resolve(downloadsDir)
+  for (const start of dirs) {
+    let dir = resolve(start)
+    while (isInside(root, dir)) {
+      try {
+        if (readdirSync(dir).length > 0) break
+        rmdirSync(dir)
+      } catch {
+        break
+      }
+      dir = dirname(dir)
+    }
+  }
+}
+
+/**
+ * Borra un elemento. Con trashFiles, sus ficheros van a la papelera de reciclaje
+ * (se pueden recuperar), salvo los que use también otro elemento; después se
+ * quitan las carpetas de descarga que hayan quedado vacías.
+ */
+export async function removeItem(
+  db: DB,
+  itemId: number,
+  trashFiles: boolean,
+  downloadsDir: string
+): Promise<{ trashed: number; errors: string[] }> {
+  const paths = (db.prepare('SELECT path FROM files WHERE item_id = ?').all(itemId) as { path: string }[]).map(
+    (r) => r.path
+  )
+  db.prepare('DELETE FROM items WHERE id = ?').run(itemId)
+  if (!trashFiles) return { trashed: 0, errors: [] }
+
+  let trashed = 0
+  const errors: string[] = []
+  const usedElsewhere = db.prepare('SELECT 1 FROM files WHERE path = ?')
+  for (const p of new Set(paths)) {
+    if (usedElsewhere.get(p) || !existsSync(p)) continue
+    try {
+      await shell.trashItem(p)
+      trashed++
+    } catch (e) {
+      errors.push(`«${basename(p)}»: ${(e as Error).message}`)
+    }
+  }
+  pruneEmptyDirs(new Set(paths.map((p) => dirname(p))), downloadsDir)
+  return { trashed, errors }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Opener, SearchResult } from '../../../shared/types'
+import type { Item, Opener, SearchResult } from '../../../shared/types'
 import { fileIcon } from '../util'
+import EditItemDialog from './EditItemDialog'
 import ItemDetail from './ItemDetail'
 import ItemRow from './ItemRow'
 
@@ -23,6 +24,8 @@ export default function SearchView({
   const [busy, setBusy] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const [openItem, setOpenItem] = useState<number | null>(null)
+  const [editing, setEditing] = useState<Item | null>(null)
+  const [refresh, setRefresh] = useState(0)
 
   useEffect(() => {
     input.current?.focus()
@@ -46,7 +49,7 @@ export default function SearchView({
       inContent ? 350 : 120
     )
     return () => clearTimeout(t)
-  }, [q, inContent])
+  }, [q, inContent, refresh])
 
   const nothing =
     q.trim().length >= 2 &&
@@ -195,8 +198,23 @@ export default function SearchView({
           openers={openers}
           onToast={onToast}
           onChanged={() => {}}
-          onEdit={() => setOpenItem(null)}
+          onEdit={(i) => {
+            setOpenItem(null)
+            setEditing(i)
+          }}
           onClose={() => setOpenItem(null)}
+        />
+      )}
+
+      {editing && (
+        <EditItemDialog
+          item={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            // Repetir la búsqueda para que se vean los cambios.
+            setRefresh((r) => r + 1)
+          }}
         />
       )}
     </div>

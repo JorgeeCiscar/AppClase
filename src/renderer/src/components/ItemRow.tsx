@@ -7,11 +7,14 @@ const statusClass = (s: string | null): string => (s ? `status-${s.replace(/\s+/
 export default function ItemRow({
   item,
   onOpen,
-  showSubject = false
+  showSubject = false,
+  selected = false
 }: {
   item: Item
   onOpen: (i: Item) => void
   showSubject?: boolean
+  /** Es la que tiene la ficha abierta al lado. */
+  selected?: boolean
 }) {
   // El color de la fila cambia según se acerca la fecha de entrega.
   const urgency = urgencyOf(item.due_date, item.status)
@@ -27,7 +30,7 @@ export default function ItemRow({
 
   return (
     <div
-      className={`list-row clickable${urgency ? ` urg urg-${urgency}` : ''}`}
+      className={`list-row clickable${urgency ? ` urg urg-${urgency}` : ''}${selected ? ' is-open' : ''}`}
       data-urgency={urgency ?? undefined}
       title={urgency ? URGENCY_LABEL[urgency] : undefined}
       onClick={() => onOpen(item)}

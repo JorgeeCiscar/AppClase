@@ -172,3 +172,29 @@ label.field > input, label.field > select, label.field > textarea { min-width: 0
 .snippet { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 12px; color: var(--muted); background: var(--bg); border-radius: 4px; padding: 4px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; z-index: 60; max-width: 70vw; }
 .toast.bad { border-color: var(--bad); background: #3a1f1f; }
+
+/* ---------- Entregas: tarjetas (propuesta 2) + ficha al lado (propuesta 5) ---------- */
+.deliv-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-items: start; }
+.deliv-page.with-detail .deliv-layout { grid-template-columns: minmax(0, 1fr) minmax(380px, 40%); }
+.deliv-groups .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.deliv-groups .list-row { flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border-radius: 12px;
+  min-height: 132px; position: relative; }
+.deliv-groups .list-row.urg { border-left: 1px solid var(--border); border-top: 5px solid var(--urg); }
+.deliv-groups .list-row .badge.kind { order: -1; }
+.deliv-groups .list-row .col { width: 100%; padding-right: 72px; }
+.deliv-groups .list-row .title { font-size: 15px; }
+.deliv-groups .list-row .due { margin-top: auto; font-size: 13px; }
+.deliv-groups .list-row [class*="status-"] { position: absolute; top: 14px; right: 14px; }
+.deliv-groups .list-row .badge.tag { display: none; }
+.deliv-groups .list-row:hover { border-color: #4a4e57; }
+.deliv-groups .list-row.is-open { outline: 2px solid var(--accent); outline-offset: -1px; }
+.unit-group { margin-left: 0; }
+
+/* Ficha lateral: fija mientras te desplazas por las tarjetas; con su propio scroll. */
+.detail-pane { position: sticky; top: 0; max-height: calc(100vh - 54px - 44px); overflow: auto; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.detail-pane-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.detail-pane-head h3 { flex: 1; margin: 0; font-size: 18px; }
+.detail-pane .modal-actions { position: sticky; bottom: -16px; background: var(--panel); padding: 12px 0 4px; margin-top: 12px; }
+.detail-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1050px) { .deliv-page.with-detail .deliv-layout { grid-template-columns: minmax(0, 1fr) 360px; } }

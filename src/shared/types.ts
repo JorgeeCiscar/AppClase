@@ -230,7 +230,8 @@ export interface Api {
     list: (filter?: ItemFilter) => Promise<Item[]>
     get: (id: number) => Promise<Item | undefined>
     save: (i: ItemInput) => Promise<Item>
-    remove: (id: number) => Promise<void>
+    /** Con trashFiles, sus ficheros van también a la papelera de reciclaje. */
+    remove: (id: number, opts?: { trashFiles?: boolean }) => Promise<{ trashed: number; errors: string[] }>
     setStatus: (id: number, status: Status | null) => Promise<Item>
     addTag: (id: number, tag: string) => Promise<void>
     removeTag: (id: number, tag: string) => Promise<void>
@@ -246,6 +247,8 @@ export interface Api {
     reveal: (id: number) => Promise<OpenResult>
     relocate: (id: number) => Promise<FileRef | undefined>
     revalidate: (itemId?: number) => Promise<number>
+    /** Algún fichero indexado cambió en el disco (editado, renombrado o borrado). */
+    onChanged: (cb: () => void) => () => void
   }
   tags: () => Promise<string[]>
   search: (q: string, inContent?: boolean) => Promise<SearchResult>
